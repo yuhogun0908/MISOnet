@@ -6,7 +6,7 @@ import pdb
 EPS = 1e-8
 
 class MISO_1(nn.Module):
-    def __init__(self,num_bottleneck, Ch,norm_type):
+    def __init__(self,num_bottleneck, Ch, Spk, norm_type):
         super(MISO_1,self).__init__()
 
     #init#
@@ -21,32 +21,55 @@ class MISO_1(nn.Module):
 
         self.num_bottleneck = num_bottleneck
         self.encoders = []
-        B_channels = [2*Ch,24,32,32,32,32,64,128,384]
+        self.decoders = []
+        en_bottleneck_channels = [2*Ch,24,32,32,32,32,64,128,384]
         for n_b in range(num_bottleneck):
-            block = self.make_layer(n_b,B_channels[n_b], B_channels[n_b+1])
+            block = self.en_make_layer(n_b,en_bottleneck_channels[n_b], en_bottleneck_channels[n_b+1])
             self.encoders.append(block)
-
+    
         self.TCN = TemporalConvNet(2,7,384,384,384,norm_type)
 
+        de_bottleneck_channels = [384,128,64,32,32,32,32,24,2*Spk]
+        for n_b in range(num_bottleneck):
+            block = self.de_make_layer(n_b,2*de_bottleneck_channels[n_b],de_bottleneck_channels[n_b+1])
+            self.decoders.append(block)
 
-    def make_layer(self,b_idx,in_channels, out_channels):
+
+    def en_make_layer(self,block_idx,in_channels, out_channels):
         layers = []
-        if b_idx <= 5:
-            if b_idx == 0:
+        if block_idx < 5:
+            if block_idx == 0:
                 layers.append(init_Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
                 layers.append(DenseBlock(out_channels,out_channels,out_channels))
             else:
                 layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
                 layers.append(DenseBlock(out_channels,out_channels,out_channels))
+        elif block_idx == 7:
+            layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
         else:
             layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
 
         return nn.Sequential(*layers)
+    
+    def de_make_layer(self,block_idx,in_channels, out_channels):
+        """
+        in_channels : input + skip-connection 
+        """
+        layers = []
+        if block_idx >= 3:
+            if block_idx == 7:
+                layers.append(DenseBlock(in_channels,in_channels//2,in_channels))
+                layers.append(last_Deconv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1), padding=(1,0)))
+            else:
+                layers.append(DenseBlock(in_channels,in_channels//2,in_channels))
+                layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
+        elif block_idx == 0:
+            layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3),stride=(1,1),padding=(1,0)))
+        else:
+            layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3),stride=(1,2),padding=(1,0)))
 
+        return nn.Sequential(*layers)
 
-
-        # self.encoder_1 = Encoder_1(Ch) # [B,2C, T, 257] -> [B,384,T,1]
-        # self.decoder_1 = Decoder_1()
 
     def forward(self,mixture):
         real_spec = mixture.real # [B,C,F,T]
@@ -56,29 +79,35 @@ class MISO_1(nn.Module):
 
         x = torch.cat((real_spec,imag_spec),dim=1)
         
-        '''Encoder 부분 append하는 식으로 해야됨. 이거 수정하기'''
-        # en_out = self.encoder_1(Net_input) 
         xs = []
         for i, encoder in enumerate(self.encoders):
-            print(i)
-
+            print(i)    
             x = encoder(x)
             xs.append(x)
         #Reshape [B,384, T ,1] -> [B,384,T]
         x = torch.squeeze(x)
 
-        pdb.set_trace()
         #[B,384,T] -> [B,384,T]
         tcn_out = self.TCN(x)
-        #Reshape
-        
-        
+        de_x =tcn_out
+        #Reshape [B,384,T] -> [B,384,T,1]
+        de_x = torch.unsqueeze(de_x,dim=-1)
 
-        pdb.set_trace()
-        
-        # tcn_out = self.TCN(en_out)
-        # de_out = self.decoder_1(tcn_out)
+        for i, decoder in enumerate(self.decoders):
+            #[B,C,T,F] -> [B,2C,T,F]
+            de_x = torch.cat((de_x, xs[self.num_bottleneck-1-i]), dim=1)
+            de_x = decoder(de_x)
 
+        #[B,2Spk,T,257]
+        B,Spk_realimag,T,F = de_x.size()
+        #[B,2Spk,T,257] -> [B,Spk,T,257]
+        o_real_spec = de_x[:,0:Spk_realimag//2,:,:]
+        o_imag_spec = de_x[:,Spk_realimag//2:Spk_realimag,:,:]
+        #[B,Spk,T,257] -> [B,Spk,T,257]
+        separate = torch.complex(o_real_spec,o_imag_spec)
+        
+        return separate
+        
 
 # #MISO_1 Encoder
 # class Encoder_1(nn.Module):
@@ -174,6 +203,26 @@ class Conv2d_(nn.Module):
     def forward(self,x):
         return self.net(x)
 
+class last_Deconv2d_(nn.Module):
+    def __init__(self,in_channels,out_channels, kernel_size=(3,3), stride=(1,1), padding=(1,0)):
+        super(last_Deconv2d_,self).__init__()
+        self.deconv2d = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+    def forward(self,x):
+        return self.deconv2d(x)
+
+class DeConv2d_(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, norm_type="IN"):
+        super(DeConv2d_,self).__init__()
+        deconv2d = nn.ConvTranspose2d(in_channels,out_channels,kernel_size=kernel_size, stride=stride, padding=padding)
+        elu = nn.ELU()
+        norm = nn.InstanceNorm2d(out_channels)
+
+        self.net = nn.Sequential(deconv2d,elu,norm)
+
+    def forward(self,x):
+        return self.net(x)
+
+
 
 class DenseBlock(nn.Module):
 
@@ -181,47 +230,46 @@ class DenseBlock(nn.Module):
         super(DenseBlock,self).__init__()
         
         self.conv1 = nn.Sequential(
-            nn.Conv2d(2*init_ch,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
+            nn.Conv2d(init_ch,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
             nn.InstanceNorm2d(g1)
         )
         self.conv2 = nn.Sequential(
-            nn.Conv2d(3*g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
+            nn.Conv2d(init_ch+g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
             nn.InstanceNorm2d(g1)
         )
         self.conv3 = nn.Sequential(
-            nn.Conv2d(4*g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
+            nn.Conv2d(init_ch+2*g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
             nn.InstanceNorm2d(g1)
         )        
         self.conv4 = nn.Sequential(
-            nn.Conv2d(5*g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
+            nn.Conv2d(init_ch+3*g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
             nn.InstanceNorm2d(g1)
         )
         self.conv5 = nn.Sequential(
-            nn.Conv2d(6*g1,g2, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
+            nn.Conv2d(init_ch+4*g1,g2, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
             nn.InstanceNorm2d(g2)
         )
     def forward(self,x):
-        y0 = torch.cat((x,x),dim=1)
-        y1 = self.conv1(y0)
+        y0 = self.conv1(x)
         
-        y1_0 = torch.cat((y0,y1),dim=1)
-        y2 = self.conv2(y1_0)
+        y0_x = torch.cat((x,y0),dim=1)
+        y1 = self.conv2(y0_x)
 
-        y2_1_0 = torch.cat((y0,y1,y2),dim=1)
-        y3 = self.conv3(y2_1_0)
+        y1_0_x = torch.cat((x,y0,y1),dim=1)
+        y2 = self.conv3(y1_0_x)
 
-        y3_2_1_0 = torch.cat((y0,y1,y2,y3),dim=1)
-        y4 = self.conv4(y3_2_1_0)
+        y2_1_0_x = torch.cat((x,y0,y1,y2),dim=1)
+        y3 = self.conv4(y2_1_0_x)
 
-        y4_3_2_1_0 = torch.cat((y0,y1,y2,y3,y4),dim=1)
-        y5 = self.conv5(y4_3_2_1_0)
+        y3_2_1_0_x = torch.cat((x,y0,y1,y2,y3),dim=1)
+        y4 = self.conv5(y3_2_1_0_x)
         
-        return y5
+        return y4
 
 
 
@@ -381,13 +429,6 @@ class GlobalLayerNorm(nn.Module):
 if __name__ == "__main__":
     
     input = torch.randn(10,8,150,257, dtype=torch.cfloat)
-    model = MISO_1(8,8,"IN")    
+    model = MISO_1(8,8,2,"IN")    
     output = model(input)
     pdb.set_trace()
-
-
-    # TCN
-
-    input = torch.randn(10,384,150)
-    model = TemporalConvNet(2,7,384,384,384,norm_type)
-    output = model(input)

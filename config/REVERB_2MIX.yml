@@ -60,6 +60,7 @@ dataloader:
 MISO_1:
   num_bottleneck : 8
   Ch : 8  # number of mic
+  Spk : 2 # number of speaker
   norm_type : IN  #Instance Norm
 
 #### Optimizer settings
