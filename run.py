@@ -55,13 +55,13 @@ def run(args,config):
         #     model_sep.cuda()
 
         # optimizer
-        # if config['optimizer']['name'] == 'Adam':
-        #     optimizer = torch.optim.Adam(model_sep.parameters(),
-        #                                  lr = config['optimizer']['lr'],
-        #                                  weight_decay = config['optimizer']['weight_decay'])
+        if config['optimizer']['name'] == 'Adam':
+            optimizer = torch.optim.Adam(model_sep.parameters(),
+                                         lr = config['optimizer']['lr'],
+                                         weight_decay = config['optimizer']['weight_decay'])
 
         #trainer
-        trainer = Trainer(tr_loader, dt_loader,model_sep optimizer,config)
+        trainer = Trainer(tr_loader, dt_loader,model_sep,optimizer,config)
         trainer.train()
 
 

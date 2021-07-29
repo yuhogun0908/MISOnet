@@ -58,13 +58,16 @@ dataloader:
 
 # #### network structures
 MISO_1:
-  #block: ResidualBlock
-  N : 1
+  num_bottleneck : 8
+  Ch : 8  # number of mic
+  norm_type : IN  #Instance Norm
+
 #### Optimizer settings
 trainer:
   epochs : 50
   device : 1
   save_path : ./model_saved/
+
 
 optimizer:
   name: Adam   ### Adam, RMSprop, SGD
