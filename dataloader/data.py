@@ -16,7 +16,6 @@ class AudioDataset(data.Dataset):
         self.noverlap = STFT_args['overlap']
         
         self.pickle_dir = list(Path(pickle_dir).glob('**/**/**/**/*.pickle'))
-        
         # # check chunked audio signal
         # MAX_INT16 = np.iinfo(np.int16).max
         # test=  ref2 * MAX_INT16
@@ -53,13 +52,14 @@ class AudioDataset(data.Dataset):
         ref2 = data_infos['ref2']
         ref2_stft = self.STFT(ref2)
 
-        # numpy to torch
-        mix_stft = torch.from_numpy(mix_stft)
-        ref1_stft = torch.from_numpy(ref1_stft)
-        ref2_stft = torch.from_numpy(ref2_stft)
+        # numpy to torch & reshpae [C,F,T] ->[C,T,F]
+
+        mix_stft = torch.permute( torch.from_numpy(mix_stft),[0,2,1])
+        ref1_stft = torch.permute( torch.from_numpy(ref1_stft), [0,2,1])
+        ref2_stft = torch.permute( torch.from_numpy(ref2_stft), [0,2,1])
         
         return mix_stft, ref1_stft, ref2_stft
 
     
     def __len__(self):
-        return len(self.tr_pickle_dir)
+        return len(self.pickle_dir)

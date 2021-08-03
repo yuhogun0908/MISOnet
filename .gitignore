@@ -118,3 +118,8 @@ venv.bak/
 
 # mkdocs documentation
 /site
+
+# model weight
+./model_result/*
+
+./runs/*

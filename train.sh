@@ -1,5 +1,5 @@
 python run.py \
 -c ./config \
 -d REVERB_2MIX \
--m Extraction  # Extraction # Train # Test
--u 1
+-m Train  # Extraction # Train # Test
+-u 1 # Whether use gpu 

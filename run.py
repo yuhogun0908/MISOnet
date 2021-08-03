@@ -12,6 +12,9 @@ import trainer
 import pdb
 import os
 import pickle
+from model import MISO_1
+import torch
+from trainer import Trainer
 # Blind Source Separation by using NN
 # 1. Feature Extractor
 # 2. Build dataloader 
@@ -44,15 +47,17 @@ def run(args,config):
             tr_dataset = AudioDataset('Train',tr_pickle_dir,**config['STFT'])
             tr_loader = DataLoader(tr_dataset, **config['dataloader']['Train'])
             # dt 데이터 만들고 주석 풀기
-            # dt_dataset = AudioDataset('Development',dt_pickle_dir,**config['STFT'])
-            # dt_loader = Dataloader(dt_dataset,**config['dataloader']['Development'])
-
-        # model
-        model_sep = MISO_1(**config['MISO_1'])
-        # print(model_sep)
-        # if args.use_cuda:
-        #     model_sep = torch.nn.DataParallel(model_sep)
-        #     model_sep.cuda()
+            dt_dataset = AudioDataset('Development',dt_pickle_dir,**config['STFT'])
+            dt_loader = DataLoader(dt_dataset,**config['dataloader']['Development'])
+        # models
+        if args.use_cuda:
+            # model_sep = torch.nn.DataParallel(model_sep)
+            
+            model_sep = MISO_1(**config['MISO_1']).cuda(config['gpu_num'])
+            print(model_sep)
+        else:
+            model_sep = MISO_1(**config['MISO_1'])
+            print(model_sep)
 
         # optimizer
         if config['optimizer']['name'] == 'Adam':
@@ -61,7 +66,7 @@ def run(args,config):
                                          weight_decay = config['optimizer']['weight_decay'])
 
         #trainer
-        trainer = Trainer(tr_loader, dt_loader,model_sep,optimizer,config)
+        trainer = Trainer(tr_loader, dt_loader,model_sep,optimizer,config,config['gpu_num'])
         trainer.train()
 
 
@@ -72,7 +77,6 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dataset', type = str, help = 'Dataset')
     parser.add_argument('-m', '--mode', type = str, help= 'Extract or Train or Test')
     parser.add_argument('-u', '--use_cuda', type = int, default=1, help='Whether use GPU')
-
     # Train argument
     
 

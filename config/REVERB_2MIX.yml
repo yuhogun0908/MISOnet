@@ -1,6 +1,7 @@
 #### general settings
 # name: MYNET
 use_tb_logger: true
+gpu_num :  0
 
 fs : 16000
 chunk_time : 4
@@ -21,35 +22,16 @@ STFT:
   length : 512 #32ms
   overlap : 128 #8ms
 
-# Task related
-
-# #### datasets
-# datasets:
-#   train: '/home/hogun/SED/coding/Bluekite/data/'
-#   valid: '/home/hogun/SED/coding/Bluekite/data/'
-#   test: '/home/hogun/SED/coding/Bluekite/data/'
-#   extraction : '/home/hogun/SED/coding/Bluekite/data/'
-#   select_testdata : A  #'A', 'B', 'C', 'D' defalt = 'A'
-#   C_B : 'C' #'C', 'B'
-  
-# extraction:
-#   target_mode: 1 #1: (S S) 2 : (Q Q), 3 : (Q S), 4: (S Q) 
-#   tau: 1.5
-#   v: 0.3
-#   segLen: 1
-#   feature_onoff: 1
-#   spec_augmentation : True
-
 dataloader:
   Train:
-    batch_size: 128
+    batch_size: 16
     shuffle: True
-    num_workers: 0
+    num_workers: 8
 
   Development:
-    batch_size: 128
+    batch_size: 16
     shuffle: False
-    num_workers: 0
+    num_workers: 8
 
   Evaluation:
     batch_size: 1
@@ -59,68 +41,28 @@ dataloader:
 # #### network structures
 MISO_1:
   num_bottleneck : 8
+  en_bottleneck_channels : [16,24,32,32,32,32,64,128,384] # 16: 2*Ch 
+  de_bottleneck_channels : [384,128,64,32,32,32,32,24,4]  # 4: 2*Spk
   Ch : 8  # number of mic
   Spk : 2 # number of speaker
   norm_type : IN  #Instance Norm
 
 #### Optimizer settings
 trainer:
-  epochs : 50
+  epochs : 100
   device : 1
-  save_path : ./model_saved/
-
+  half_lr : True
+  early_stop : True # early training when no improvement for 10 epochs
+  max_norm : 5.0 # Gradient norm threshold to clip
+  print_freq : 10 #frequency of printing training info
+  save_folder : model_result/temp
+  model_path : temp1.pth.tar
+  check_point : [True,10] # Enables checkpoint saving of model per 10epochs
+  
+  model_load : [False,'./model_result/temp/epoch1.pth.tar']
 
 optimizer:
   name: Adam   ### Adam, RMSprop, SGD
   lr: !!float 1e-3  #Init learning rqte
   weight_decay: 0.0 #weight decay
   
-
-
-# #MYNEY(Block_Model, layers, num_classes, in_channels)
-
-# #### training settings: learning rate scheme, loss
-# trainer:
-#   dataset_name: MIVIA
-#   save_path: ./ckpt/MIVAI/RESNET
-#   epochs: 1000
-#   device: 1
-#   p : 0.5
-#   # load_ckpt: false
-
-# tester:
-#   p : 0.5
-#   ckpt_path: ./ckpt/RWF/617_3.3689.pt
-#   device: 0
-
-
-# criterion:
-#   # name: CTCLoss
-#   name: focal_loss
-
-
-  
-
-# #### scheduler settings
-# scheduler:
-#   name: plateau
-#   min_lr: !!float 1e-8
-#   patience: 2
-#   threshold : 0.0001
-#   threshold_mode : abs
-#   cooldown : 0
-#   factor: 0.5
-
-# # #### Resume training settings
-# # resume:
-# #   state: false
-# #   path: /home/minseok/Dual-Path-RNN/checkpoint
-
-
-# # #### logger
-# # logger:
-# #   name: DPCL
-# #   path: /home/minseok/Dual-Path-RNN-Pytorch/checkpoint
-# #   screen: false
-# #   tofile: true
-#   # print_freq: 1000

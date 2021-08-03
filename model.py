@@ -6,30 +6,25 @@ import pdb
 EPS = 1e-8
 
 class MISO_1(nn.Module):
-    def __init__(self,num_bottleneck, Ch, Spk, norm_type):
+    def __init__(self,num_bottleneck,en_bottleneck_channels,de_bottleneck_channels,Ch,Spk,norm_type):
         super(MISO_1,self).__init__()
-
-    #init#
-    # multi-channel separation network (MISO_1)
-    
-    # encoder
-    # ch = 8 -> real + imag = 16
+        #init#        
+        # ch = 8 -> real + imag = 16
+        # en_bottleneck_channels = [2*Ch,24,32,32,32,32,64,128,384]
+        # de_bottleneck_channels = [384,128,64,32,32,32,32,24,2*Spk]
 
         """
         num_bottleneck : number of bottleneck
         """
-
         self.num_bottleneck = num_bottleneck
-        self.encoders = []
-        self.decoders = []
-        en_bottleneck_channels = [2*Ch,24,32,32,32,32,64,128,384]
+        self.encoders = nn.ModuleList()
+        self.decoders = nn.ModuleList()
         for n_b in range(num_bottleneck):
             block = self.en_make_layer(n_b,en_bottleneck_channels[n_b], en_bottleneck_channels[n_b+1])
             self.encoders.append(block)
     
         self.TCN = TemporalConvNet(2,7,384,384,384,norm_type)
 
-        de_bottleneck_channels = [384,128,64,32,32,32,32,24,2*Spk]
         for n_b in range(num_bottleneck):
             block = self.de_make_layer(n_b,2*de_bottleneck_channels[n_b],de_bottleneck_channels[n_b+1])
             self.decoders.append(block)
@@ -72,16 +67,15 @@ class MISO_1(nn.Module):
 
 
     def forward(self,mixture):
-        real_spec = mixture.real # [B,C,F,T]
-        imag_spec = mixture.imag # [B,C,F,T]
+        real_spec = mixture.real.float() # [B,C,F,T]
+        imag_spec = mixture.imag.float() # [B,C,F,T]
 
         #reference mic -> circular shift 고려해야 됨.
-
         x = torch.cat((real_spec,imag_spec),dim=1)
         
         xs = []
         for i, encoder in enumerate(self.encoders):
-            print(i)    
+            # print(i)    
             x = encoder(x)
             xs.append(x)
         #Reshape [B,384, T ,1] -> [B,384,T]
@@ -108,82 +102,6 @@ class MISO_1(nn.Module):
         
         return separate
         
-
-# #MISO_1 Encoder
-# class Encoder_1(nn.Module):
-#     def __init__(self,B, Ch):
-#         """
-#         B : number of bottleneck
-
-#         """
-#         super(Encoder_1,self).__init__()
-
-
-
-#         # self.init_conv2d = nn.Conv2d(2*Ch,24, kernel_size =(3,3),stride=(1,1),padding=(1,0))
-#         # self.denseblock_1 = DenseBlock(24,24,24)
-#         # self.denseblock_2 = DenseBlock(32,32,32)
-#         # self.denseblock_3 = DenseBlock(32,32,32)
-#         # self.denseblock_4 = DenseBlock(32,32,32)
-#         # self.denseblock_5 = DenseBlock(32,32,32)
-
-#         # self.conv2d_1 = nn.Conv2d(24,32, kernel_size=(3,3), stride=(1,2),padding=(1,0)) 
-#         # self.conv2d_2 = nn.Conv2d(32,32, kernel_size=(3,3), stride=(1,2),padding=(1,0))
-#         # self.conv2d_3 = nn.Conv2d(32,32, kernel_size=(3,3), stride=(1,2),padding=(1,0))
-#         # self.conv2d_4 = nn.Conv2d(32,32, kernel_size=(3,3), stride=(1,2),padding=(1,0))
-#         # self.conv2d_5 = nn.Conv2d(32,64, kernel_size=(3,3), stride=(1,2),padding=(1,0))
-#         # self.conv2d_6 = nn.Conv2d(64,128, kernel_size=(3,3), stride=(1,2),padding=(1,0))
-#         # self.conv2d_7 = nn.Conv2d(128,384, kernel_size=(3,3), stride=(1,2),padding=(1,0))
-
-
-#         B_channels = [2*Ch,24,32,32,32,32,644,128,384]
-#         """
-#         b : encoder block index
-#         """
-#         for b in range(B):
-#             block = self.make_layer(b,B_channels[b], B_channels[b+1])
-#             self.encoders.append(block)
-
-
-#     def make_layer(self,b_idx,in_channels, out_channels):
-#         layers = []
-#         if b_indx <= 5:
-#             if b_indx == 0:
-#                 layers.append(init_Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
-#                 layers.append(DenseBlock(out_channels,out_channels,out_channels))
-#             else:
-#                 layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
-#                 layers.append(DenseBlock(out_channels,out_channels,out_channels))
-#         else:
-#             layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
-
-#         return nn.Sequential(*layers)
-
-#     def forward(self,mixture):
-#         # y1 = self.init_conv2d(mixture)
-#         # y2 = self.denseblock_1(y1)
-#         # y3 = self.conv2d_1(y2)
-
-#         # y4 = self.denseblock_2(y3)
-#         # y5 = self.conv2d_2(y4)
-#         # y6 = self.denseblock_3(y5)
-#         # y7 = self.conv2d_3(y6)
-#         # y8 = self.denseblock_4(y7)
-#         # y9 = self.conv2d_4(y8)
-#         # y10 = self.denseblock_5(y9)
-#         # y11 = self.conv2d_5(y10)
-#         # y12 = self.conv2d_6(y11)
-#         # y13 = self.conv2d_7(y12)
-
-#         # return y13
-#         xs = []
-#         for i, encoder in enumerate(self.encoders):
-#             x = encoder(x)
-#             xs.append(x)
-#         pdb.set_trace()
-
-#         return 
-
 class init_Conv2d_(nn.Module):
     def __init__(self,in_channels, out_channels, kernel_size=(3,3),stride=(1,1),padding=(1,0)):
         super(init_Conv2d_, self).__init__()
@@ -197,9 +115,7 @@ class Conv2d_(nn.Module):
         conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
         elu = nn.ELU()
         norm = nn.InstanceNorm2d(out_channels) # 384
-
         self.net = nn.Sequential(conv2d,elu,norm)
-
     def forward(self,x):
         return self.net(x)
 
@@ -216,9 +132,7 @@ class DeConv2d_(nn.Module):
         deconv2d = nn.ConvTranspose2d(in_channels,out_channels,kernel_size=kernel_size, stride=stride, padding=padding)
         elu = nn.ELU()
         norm = nn.InstanceNorm2d(out_channels)
-
         self.net = nn.Sequential(deconv2d,elu,norm)
-
     def forward(self,x):
         return self.net(x)
 
@@ -228,7 +142,7 @@ class DenseBlock(nn.Module):
 
     def __init__(self,init_ch, g1, g2):
         super(DenseBlock,self).__init__()
-        
+
         self.conv1 = nn.Sequential(
             nn.Conv2d(init_ch,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
@@ -418,12 +332,6 @@ class GlobalLayerNorm(nn.Module):
         var = (torch.pow(y-mean, 2)).mean(dim=1, keepdim=True).mean(dim=2, keepdim=True)
         gLN_y = self.gamma * (y - mean) / torch.pow(var + EPS, 0.5) + self.beta
         return gLN_y
-
-
-# class Decoder_1(nn.Module):
-#     def __init__(self, ):
-
-#     def forward(self, ):
 
 
 if __name__ == "__main__":
