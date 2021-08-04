@@ -1,0 +1,68 @@
+#### general settings
+# name: MYNET
+use_tb_logger: true
+gpu_num :  0
+
+fs : 16000
+chunk_time : 4
+least_time : 2
+
+REVERB_2MIX:
+  select_mode : 2 # 1 : train, 2: development, 3: evaluation
+  num_spks : 2
+  scp_list : /home/nas/user/hogun/NN_BSS/dataset/REVERB/etc/
+  tr_parent_wave_list : /home/nas/user/hogun/NN_BSS/dataset/REVERB/tr/data/
+  dt_parent_wave_list : /home/nas/user/hogun/NN_BSS/dataset/REVERB/dt/data/
+  saved_tr_pickle_dir : /home/data/hogun/REVERB/tr/
+  saved_dt_pickle_dir : /home/data/hogun/REVERB/dt/
+
+STFT:
+  fs : 16000
+  window : hann
+  length : 512 #32ms
+  overlap : 128 #8ms
+
+dataloader:
+  Train:
+    batch_size: 16
+    shuffle: True
+    num_workers: 8
+
+  Development:
+    batch_size: 16
+    shuffle: False
+    num_workers: 8
+
+  Evaluation:
+    batch_size: 1
+    shuffle: false
+    num_workers: 50
+
+# #### network structures
+MISO_1:
+  num_bottleneck : 8
+  en_bottleneck_channels : [16,24,32,32,32,32,64,128,384] # 16: 2*Ch 
+  de_bottleneck_channels : [384,128,64,32,32,32,32,24,4]  # 4: 2*Spk
+  Ch : 8  # number of mic
+  Spk : 2 # number of speaker
+  norm_type : IN  #Instance Norm
+
+#### Optimizer settings
+trainer:
+  epochs : 100
+  device : 1
+  half_lr : True
+  early_stop : True # early training when no improvement for 10 epochs
+  max_norm : 5.0 # Gradient norm threshold to clip
+  print_freq : 10 #frequency of printing training info
+  save_folder : model_result/temp
+  model_path : temp1.pth.tar
+  check_point : [True,10] # Enables checkpoint saving of model per 10epochs
+  
+  model_load : [False,'./model_result/temp/epoch1.pth.tar']
+
+optimizer:
+  name: Adam   ### Adam, RMSprop, SGD
+  lr: !!float 1e-3  #Init learning rqte
+  weight_decay: 0.0 #weight decay
+  

@@ -2,7 +2,7 @@
 Unofficial Pytorch Multi-microphone complex spectral mapping for utterance-wise and continuous speech separation(MISO-BF-MISO)
 
 ## Todo
-- [ ] MISO1 implementation (seperation Network)
+- [x] MISO1 implementation (seperation Network)
 - [ ] MVDR implementation
 - [ ] MISO3 implementatino (enhancement Network)
 - [ ] Speaker counting Network
