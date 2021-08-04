@@ -1,5 +1,6 @@
 # MISOnet
 Unofficial Pytorch Multi-microphone complex spectral mapping for utterance-wise and continuous speech separation(MISO-BF-MISO)
+https://arxiv.org/abs/2010.01703
 
 ## Todo
 - [x] MISO1 implementation (seperation Network)
@@ -10,4 +11,4 @@ Unofficial Pytorch Multi-microphone complex spectral mapping for utterance-wise 
 - [ ] LibriCSS Dataset generation
 
 ## Reference
-https://arxiv.org/abs/2010.01703
+https://github.com/kaituoxu/Conv-TasNet
