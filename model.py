@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as f
 import pdb
-
+import math
 EPS = 1e-8
 
 class MISO_1(nn.Module):
@@ -29,6 +29,7 @@ class MISO_1(nn.Module):
             block = self.de_make_layer(n_b,2*de_bottleneck_channels[n_b],de_bottleneck_channels[n_b+1])
             self.decoders.append(block)
 
+        self.sigmoid = nn.Sigmoid()
 
     def en_make_layer(self,block_idx,in_channels, out_channels):
         layers = []
@@ -69,7 +70,6 @@ class MISO_1(nn.Module):
     def forward(self,mixture):
         real_spec = mixture.real.float() # [B,C,F,T]
         imag_spec = mixture.imag.float() # [B,C,F,T]
-
         #reference mic -> circular shift 고려해야 됨.
         x = torch.cat((real_spec,imag_spec),dim=1)
         
@@ -92,15 +92,28 @@ class MISO_1(nn.Module):
             de_x = torch.cat((de_x, xs[self.num_bottleneck-1-i]), dim=1)
             de_x = decoder(de_x)
 
-        #[B,2Spk,T,257]
+        #[B,2*Spks,T,257]
         B,Spk_realimag,T,F = de_x.size()
-        #[B,2Spk,T,257] -> [B,Spk,T,257]
+        #[B,2*Spks,T,257] -> [B,Spk,T,257]
         o_real_spec = de_x[:,0:Spk_realimag//2,:,:]
         o_imag_spec = de_x[:,Spk_realimag//2:Spk_realimag,:,:]
         #[B,Spk,T,257] -> [B,Spk,T,257]
-        separate = torch.complex(o_real_spec,o_imag_spec)
-        
-        return separate
+        # separate = torch.complex(o_real_spec,o_imag_spec)
+        if True in torch.isnan(o_real_spec) or True in torch.isnan(o_imag_spec):
+            pdb.set_trace()
+        return torch.complex(o_real_spec, o_imag_spec)
+
+        #Mask
+        # separate_real = self.sigmoid(o_real_spec) 
+        # separate_imag = self.sigmoid(o_imag_spec)
+        # out_real_s1 = torch.unsqueeze(real_spec[:,0,:,:] * separate_real[:,0,:,:],dim=1)
+        # out_real_s2 = torch.unsqueeze(real_spec[:,0,:,:] * separate_real[:,1,:,:],dim=1)
+        # out_imag_s1 = torch.unsqueeze(imag_spec[:,0,:,:] * separate_imag[:,0,:,:],dim=1)
+        # out_imag_s2 = torch.unsqueeze(imag_spec[:,0,:,:] * separate_imag[:,1,:,:],dim=1)
+        # out_real = torch.cat((out_real_s1, out_real_s2), dim = 1)
+        # out_imag = torch.cat((out_imag_s1, out_imag_s2), dim = 1)
+        # separate = torch.complex(out_real,out_imag)
+        # return separate
         
 class init_Conv2d_(nn.Module):
     def __init__(self,in_channels, out_channels, kernel_size=(3,3),stride=(1,1),padding=(1,0)):
@@ -114,7 +127,7 @@ class Conv2d_(nn.Module):
         super(Conv2d_,self).__init__()
         conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
         elu = nn.ELU()
-        norm = nn.InstanceNorm2d(out_channels) # 384
+        norm = nn.InstanceNorm2d(out_channels,affine=False) # 384
         self.net = nn.Sequential(conv2d,elu,norm)
     def forward(self,x):
         return self.net(x)
@@ -131,7 +144,7 @@ class DeConv2d_(nn.Module):
         super(DeConv2d_,self).__init__()
         deconv2d = nn.ConvTranspose2d(in_channels,out_channels,kernel_size=kernel_size, stride=stride, padding=padding)
         elu = nn.ELU()
-        norm = nn.InstanceNorm2d(out_channels)
+        norm = nn.InstanceNorm2d(out_channels,affine=False)
         self.net = nn.Sequential(deconv2d,elu,norm)
     def forward(self,x):
         return self.net(x)
@@ -146,27 +159,27 @@ class DenseBlock(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(init_ch,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
-            nn.InstanceNorm2d(g1)
+            nn.InstanceNorm2d(g1,affine=False)
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(init_ch+g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
-            nn.InstanceNorm2d(g1)
+            nn.InstanceNorm2d(g1,affine=False)
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(init_ch+2*g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
-            nn.InstanceNorm2d(g1)
+            nn.InstanceNorm2d(g1,affine=False)
         )        
         self.conv4 = nn.Sequential(
             nn.Conv2d(init_ch+3*g1,g1, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
-            nn.InstanceNorm2d(g1)
+            nn.InstanceNorm2d(g1,affine=False)
         )
         self.conv5 = nn.Sequential(
             nn.Conv2d(init_ch+4*g1,g2, kernel_size=(3,3),stride=(1,1),padding=(1,1)),
             nn.ELU(),
-            nn.InstanceNorm2d(g2)
+            nn.InstanceNorm2d(g2,affine=False)
         )
     def forward(self,x):
         y0 = self.conv1(x)
@@ -247,6 +260,8 @@ class TemporalBlock(nn.Module):
         Input : [B,C,T]
         Output : [B,C,T]
         """
+        if x.dim() == 2:
+            x = torch.unsqueeze(x,dim=0)
         residual = x
         out = self.net(x)
         return out + residual
@@ -278,7 +293,7 @@ def chose_norm(norm_type, channel_size):
     elif norm_type == "cLN":
         return ChannelwiseLayerNorm(channel_size)
     elif norm_type == "IN":
-        return nn.InstanceNorm1d(channel_size)
+        return nn.InstanceNorm1d(channel_size,affine=False)
     else:
         return nn.BatchNorm1d(channel_size)
 

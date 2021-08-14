@@ -70,7 +70,7 @@ class chunkSplit(object):
             ref2_ = np.pad(ref2, ((0,gap),(0,0)), constant_values=0)
             split_samp = {'mix':mix_ ,'ref1':ref1_, 'ref2':ref2_}
             with open(save_dir + '_'+ str(split_idx)+'.pickle', 'wb') as f:
-                    pickle.dump(split_samp,f)   
+                    pickle.dump(split_samp,f)       
 
         if length > chunk_size:
             start = 0
@@ -87,6 +87,7 @@ class chunkSplit(object):
 
                 # verify chunk audio signal
                 # test=  mix_ * MAX_INT16
+                # test = mix_ * 2**(nbits-1)
                 # test = test.astype(np.int16)
                 # wf.write('sample.wav',self.fs,test)
                 # overlap 2s
@@ -109,12 +110,12 @@ class AudioSave(object):
         #train은 mix할때 하나의 source 기준으로 2번 mix
         #dev와 test는 1번 mix
         if self.mode == 'Train':
-            self.num_dup = 2
+            self.num_dup = 1
         else:
             self.num_dup = 1
         self.wave_path = wave_path
         self.fs = fs
-        self.splitter = chunkSplit(chunk_time,least_time,fs,normalize=False)
+        self.splitter = chunkSplit(chunk_time,least_time,fs,normalize=True)
         self.num_spks = num_spks
 
         if mode == 'Train':
@@ -135,7 +136,7 @@ class AudioSave(object):
                     self.lines.extend(f.read().splitlines())
 
 
-        self.array_types = os.listdir(wave_path)  #['near', 'far']
+        self.array_types = os.listdir(wave_path)
         # self.All_split_samps_dict = {}
 
     def save(self,array_info,save_pickle_dir):
@@ -158,30 +159,17 @@ class AudioSave(object):
                     temp_direct1 = []
                     temp_direct2 = []
                     paths_dict = {}
-                    for nch in range(8):
-                        temp_direct1.append(Path(str(wave_path) + '_Direct1_file'+str(f_idx+1)+'_ch' + str(nch+1) + '.wav'))
-                        temp_direct2.append(Path(str(wave_path) + '_Direct2_file'+str(f_idx+1)+'_ch' + str(nch+1) + '.wav'))
-                    temp_mix = Path(str(wave_path) + '_Mixed_file'+str(f_idx+1) + '.wav')
+                    temp_direct1.append(Path(str(wave_path) + '_Direct1.wav'))
+                    temp_direct2.append(Path(str(wave_path) + '_Direct2.wav'))    
+                    temp_mix = Path(str(wave_path) + '_Mixed.wav')
                     temp_dict = {'mix': [temp_mix],'ref1': temp_direct1, 'ref2':temp_direct2}
                     paths_dict.update(temp_dict)
-                # for dup_idx in range(len(list(p_wave_path.glob(str(wave_path).split('/')[-1]+'_Mixed_*.wav')))):
-                #     paths_dict = {}
-                #     mixed_path = {'mix' : list(p_wave_path.glob(str(wave_path).split('/')[-1]+'_Mixed_file'+str(dup_idx+1)+'.wav'))}
-                #     paths_dict.update(mixed_path)
-                #     for idx in range(self.num_spks):  
-                #         # if idx == 0:
-                #         ref_path = {'ref'+str(idx+1):list(p_wave_path.glob(str(wave_path).split('/')[-1]+'_Direct'+str(idx+1)+'_file'+str(dup_idx+1)+'_*.wav'))}
-                #         paths_dict.update(ref_path)
-                #             # ref_paths =  np.hstack(np.array(list(p_wave_path.glob(str(wave_path).split('/')[-1]+'_Direct'+str(idx+1)+'_file'+str(dup_idx+1)+'_*.wav'))))
-                #         # else:
-                #             # ref_paths =  np.vstack(np.array(list(p_wave_path.glob(str(wave_path).split('/')[-1]+'_Direct'+str(idx+1)+'_file'+str(dup_idx+1)+'_*.wav'))))    
-                #         # s1_ref_path = list(p_wave_path.glob(str(wave_path).split('/')[-1]+'_Direct1_file'+str(dup_idx+1)+'_*.wav'))
-                #         # s2_ref_path = list(p_wave_path.glob(str(wave_path).split('/')[-1]+'_Direct2_file'+str(dup_idx+1)+'_*.wav'))
+
                     samp_dict= self.splitter.Readwave(self.num_spks,paths_dict)
                     save_dir  = os.path.join(save_pickle_dir+array_idx)+key+'_'+str(f_idx)
                     self.splitter.Split(save_dir,samp_dict)              
         
-def main_reverb(mode,fs, chunk_time, least_time,num_spks,scp_path,wave_path,save_pickle_dir):
+def main_rirmixing(mode,fs, chunk_time, least_time,num_spks,scp_path,wave_path,save_pickle_dir):
     REVERB_SAVE = AudioSave(mode,num_spks,scp_path,wave_path,fs,chunk_time,least_time)
-    array_info = ['near', 'far']
+    array_info = ['no_reverb']
     REVERB_SAVE.save(array_info,save_pickle_dir)

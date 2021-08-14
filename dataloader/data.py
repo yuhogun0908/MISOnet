@@ -16,6 +16,8 @@ class AudioDataset(data.Dataset):
         self.noverlap = STFT_args['overlap']
         
         self.pickle_dir = list(Path(pickle_dir).glob('**/**/**/**/*.pickle'))
+        # self.pickle_dir = self.pickle_dir[0:10]
+
         # # check chunked audio signal
         # MAX_INT16 = np.iinfo(np.int16).max
         # test=  ref2 * MAX_INT16
@@ -38,6 +40,7 @@ class AudioDataset(data.Dataset):
                 stft_chcat = stft_ch
             else:
                 stft_chcat = np.append(stft_chcat,stft_ch,axis=0)
+            
         return stft_chcat
 
 
