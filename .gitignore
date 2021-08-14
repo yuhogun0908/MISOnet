@@ -120,6 +120,8 @@ venv.bak/
 /site
 
 # model weight
-./model_result/*
+./model_result/
 
-./runs/*
+./runs/
+
+.wav
