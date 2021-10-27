@@ -16,7 +16,6 @@ https://arxiv.org/abs/2010.01703
  - (optional) virtualenv
  
 ## Training
-This repository is tested on Ubuntu 20.04(WSL2)
 
 0. (Optional) Setup Virtualenv
 ```
@@ -38,3 +37,4 @@ python run.py --config=./config
 ## Reference
 https://github.com/kaituoxu/Conv-TasNet
 https://github.com/fgnt/sms_wsj
+https://github.com/chenzhuo1011/libri_css
