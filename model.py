@@ -6,12 +6,16 @@ import math
 EPS = 1e-8
 
 class MISO_1(nn.Module):
-    def __init__(self,num_bottleneck,en_bottleneck_channels,de_bottleneck_channels,Ch,Spk,norm_type):
+    def __init__(self,num_spks, num_ch, num_bottleneck,en_bottleneck_channels,de_bottleneck_channels,norm_type):
         super(MISO_1,self).__init__()
         #init#        
         # ch = 8 -> real + imag = 16
         # en_bottleneck_channels = [2*Ch,24,32,32,32,32,64,128,384]
         # de_bottleneck_channels = [384,128,64,32,32,32,32,24,2*Spk]
+
+        en_bottleneck_channels.insert(0,2*num_ch)
+        de_bottleneck_channels.append(2*num_spks)
+        # block_length = len(en_bottleneck_channels)
 
         """
         num_bottleneck : number of bottleneck
@@ -23,7 +27,9 @@ class MISO_1(nn.Module):
             block = self.en_make_layer(n_b,en_bottleneck_channels[n_b], en_bottleneck_channels[n_b+1])
             self.encoders.append(block)
     
-        self.TCN = TemporalConvNet(2,7,384,384,384,norm_type)
+        # self.TCN = TemporalConvNet(2,7,384,384,384,norm_type)
+        self.TCN = TemporalConvNet(2,7,128,128,128,norm_type)
+        
 
         for n_b in range(num_bottleneck):
             block = self.de_make_layer(n_b,2*de_bottleneck_channels[n_b],de_bottleneck_channels[n_b+1])
@@ -40,7 +46,7 @@ class MISO_1(nn.Module):
             else:
                 layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
                 layers.append(DenseBlock(out_channels,out_channels,out_channels))
-        elif block_idx == 7:
+        elif block_idx == 6:
             layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
         else:
             layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
@@ -52,8 +58,8 @@ class MISO_1(nn.Module):
         in_channels : input + skip-connection 
         """
         layers = []
-        if block_idx >= 3:
-            if block_idx == 7:
+        if block_idx >= 2:
+            if block_idx == 6:
                 layers.append(DenseBlock(in_channels,in_channels//2,in_channels))
                 layers.append(last_Deconv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1), padding=(1,0)))
             else:
@@ -68,8 +74,8 @@ class MISO_1(nn.Module):
 
 
     def forward(self,mixture):
-        real_spec = mixture.real.float() # [B,C,F,T]
-        imag_spec = mixture.imag.float() # [B,C,F,T]
+        real_spec = mixture.real.float() # [B,C,T,F]
+        imag_spec = mixture.imag.float() # [B,C,T,F]
         #reference mic -> circular shift 고려해야 됨.
         x = torch.cat((real_spec,imag_spec),dim=1)
         
@@ -78,6 +84,7 @@ class MISO_1(nn.Module):
             # print(i)    
             x = encoder(x)
             xs.append(x)
+            # print(x.shape)
         #Reshape [B,384, T ,1] -> [B,384,T]
         x = torch.squeeze(x)
 
@@ -103,7 +110,7 @@ class MISO_1(nn.Module):
             pdb.set_trace()
         return torch.complex(o_real_spec, o_imag_spec)
 
-        #Mask
+        # #Mask
         # separate_real = self.sigmoid(o_real_spec) 
         # separate_imag = self.sigmoid(o_imag_spec)
         # out_real_s1 = torch.unsqueeze(real_spec[:,0,:,:] * separate_real[:,0,:,:],dim=1)
@@ -114,7 +121,283 @@ class MISO_1(nn.Module):
         # out_imag = torch.cat((out_imag_s1, out_imag_s2), dim = 1)
         # separate = torch.complex(out_real,out_imag)
         # return separate
+
+
+
+    # Mask Based     
+    # def forward(self,mixture):
+    #     real_spec = mixture.real.float() # [B,C,F,T]
+    #     imag_spec = mixture.imag.float() # [B,C,F,T]
+    #     #reference mic -> circular shift 고려해야 됨.
+    #     x = torch.cat((real_spec,imag_spec),dim=1)
         
+    #     xs = []
+    #     for i, encoder in enumerate(self.encoders):
+    #         # print(i)    
+    #         x = encoder(x)
+    #         xs.append(x)
+    #     #Reshape [B,384, T ,1] -> [B,384,T]
+    #     x = torch.squeeze(x)
+
+    #     #[B,384,T] -> [B,384,T]
+    #     tcn_out = self.TCN(x)
+    #     de_x = x * self.sigmoid(tcn_out)
+
+    #     #Reshape [B,384,T] -> [B,384,T,1]
+    #     de_x = torch.unsqueeze(de_x,dim=-1)
+
+    #     for i, decoder in enumerate(self.decoders):
+    #         #[B,C,T,F] -> [B,2C,T,F]
+    #         de_x = torch.cat((de_x, xs[self.num_bottleneck-1-i]), dim=1)
+    #         de_x = decoder(de_x)
+
+    #     #[B,2*Spks,T,257]
+    #     B,Spk_realimag,T,F = de_x.size()
+    #     #[B,2*Spks,T,257] -> [B,Spk,T,257]
+    #     o_real_spec = de_x[:,0:Spk_realimag//2,:,:]
+    #     o_imag_spec = de_x[:,Spk_realimag//2:Spk_realimag,:,:]
+    #     #[B,Spk,T,257] -> [B,Spk,T,257]
+    #     # separate = torch.complex(o_real_spec,o_imag_spec)
+    #     if True in torch.isnan(o_real_spec) or True in torch.isnan(o_imag_spec):
+    #         pdb.set_trace()
+    #     return torch.complex(o_real_spec, o_imag_spec)
+
+
+class MISO_2(nn.Module):
+    def __init__(self,num_spks, num_ch, num_bottleneck,en_bottleneck_channels,de_bottleneck_channels,norm_type):
+        super(MISO_2,self).__init__()
+        #init#        
+        # ch = 8 -> real + imag = 16
+        # en_bottleneck_channels = [2*Ch,24,32,32,32,32,64,128,384]
+        # de_bottleneck_channels = [384,128,64,32,32,32,32,24,2*Spk]
+        en_bottleneck_channels.insert(0,2*(num_ch + 4))  # mixture 6ch + MISO1 1ch + BF 1ch
+        de_bottleneck_channels.append(2*num_spks)
+        # block_length = len(en_bottleneck_channels)
+
+        """
+        num_bottleneck : number of bottleneck
+        """
+        self.num_bottleneck = num_bottleneck
+        self.encoders = nn.ModuleList()
+        self.decoders = nn.ModuleList()
+        for n_b in range(num_bottleneck):
+            block = self.en_make_layer(n_b,en_bottleneck_channels[n_b], en_bottleneck_channels[n_b+1])
+            self.encoders.append(block)
+    
+        # self.TCN = TemporalConvNet(2,7,384,384,384,norm_type)
+        self.TCN = TemporalConvNet(2,7,128,128,128,norm_type)
+        
+
+        for n_b in range(num_bottleneck):
+            block = self.de_make_layer(n_b,2*de_bottleneck_channels[n_b],de_bottleneck_channels[n_b+1])
+            self.decoders.append(block)
+
+        self.sigmoid = nn.Sigmoid()
+
+    def en_make_layer(self,block_idx,in_channels, out_channels):
+        layers = []
+        if block_idx < 5:
+            if block_idx == 0:
+                layers.append(init_Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
+                layers.append(DenseBlock(out_channels,out_channels,out_channels))
+            else:
+                layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
+                layers.append(DenseBlock(out_channels,out_channels,out_channels))
+        elif block_idx == 6:
+            layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
+        else:
+            layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
+
+        return nn.Sequential(*layers)
+    
+    def de_make_layer(self,block_idx,in_channels, out_channels):
+        """
+        in_channels : input + skip-connection 
+        """
+        layers = []
+        if block_idx >= 2:
+            if block_idx == 6:
+                layers.append(DenseBlock(in_channels,in_channels//2,in_channels))
+                layers.append(last_Deconv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1), padding=(1,0)))
+            else:
+                layers.append(DenseBlock(in_channels,in_channels//2,in_channels))
+                layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
+        elif block_idx == 0:
+            layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3),stride=(1,1),padding=(1,0)))
+        else:
+            layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3),stride=(1,2),padding=(1,0)))
+
+        return nn.Sequential(*layers)
+
+
+    def forward(self,mixture,MISO1,BF):
+        mixture_real_spec = mixture.real.float() # [B,C,T,F]
+        mixture_imag_spec = mixture.imag.float() # [B,C,T,F]
+
+        MISO1_real_spec = MISO1.real.float()
+        MISO1_imag_spec = MISO1.imag.float()
+
+        BF_real_spec = BF.real.float()
+        BF_imag_spec = BF.imag.float()
+
+        real_spec = torch.cat((mixture_real_spec, MISO1_real_spec, BF_real_spec), dim= 1)
+        imag_spec = torch.cat((mixture_imag_spec, MISO1_imag_spec, BF_imag_spec), dim= 1)
+
+        #reference mic -> circular shift 고려해야 됨.
+        x = torch.cat((real_spec,imag_spec),dim=1)
+        
+        xs = []
+        for i, encoder in enumerate(self.encoders):
+            # print(i)    
+            x = encoder(x)
+            xs.append(x)
+            # print(x.shape)
+        #Reshape [B,384, T ,1] -> [B,384,T]
+        x = torch.squeeze(x)
+
+        #[B,384,T] -> [B,384,T]
+        tcn_out = self.TCN(x)
+        de_x =tcn_out
+        #Reshape [B,384,T] -> [B,384,T,1]
+        de_x = torch.unsqueeze(de_x,dim=-1)
+
+        for i, decoder in enumerate(self.decoders):
+            #[B,C,T,F] -> [B,2C,T,F]
+            de_x = torch.cat((de_x, xs[self.num_bottleneck-1-i]), dim=1)
+            de_x = decoder(de_x)
+
+        #[B,2*Spks,T,257]
+        B,Spk_realimag,T,F = de_x.size()
+        #[B,2*Spks,T,257] -> [B,Spk,T,257]
+        o_real_spec = de_x[:,0:Spk_realimag//2,:,:]
+        o_imag_spec = de_x[:,Spk_realimag//2:Spk_realimag,:,:]
+        #[B,Spk,T,257] -> [B,Spk,T,257]
+        # separate = torch.complex(o_real_spec,o_imag_spec)
+        if True in torch.isnan(o_real_spec) or True in torch.isnan(o_imag_spec):
+            pdb.set_trace()
+        return torch.complex(o_real_spec, o_imag_spec)
+
+
+
+class MISO_3(nn.Module):
+    def __init__(self,num_spks, num_ch, num_bottleneck,en_bottleneck_channels,de_bottleneck_channels,norm_type):
+        super(MISO_3,self).__init__()
+        #init#        
+        # ch = 8 -> real + imag = 16
+        # en_bottleneck_channels = [2*Ch,24,32,32,32,32,64,128,384]
+        # de_bottleneck_channels = [384,128,64,32,32,32,32,24,2*Spk]
+    
+        en_bottleneck_channels.insert(0,2*(num_ch + 2))  # mixture 6ch + MISO1 1ch + BF 1ch
+        de_bottleneck_channels.append(2*num_spks)
+        # block_length = len(en_bottleneck_channels)
+
+        """
+        num_bottleneck : number of bottleneck
+        """
+        self.num_bottleneck = num_bottleneck
+        self.encoders = nn.ModuleList()
+        self.decoders = nn.ModuleList()
+        for n_b in range(num_bottleneck):
+            block = self.en_make_layer(n_b,en_bottleneck_channels[n_b], en_bottleneck_channels[n_b+1])
+            self.encoders.append(block)
+    
+        # self.TCN = TemporalConvNet(2,7,384,384,384,norm_type)
+        self.TCN = TemporalConvNet(2,7,128,128,128,norm_type)
+        
+
+        for n_b in range(num_bottleneck):
+            block = self.de_make_layer(n_b,2*de_bottleneck_channels[n_b],de_bottleneck_channels[n_b+1])
+            self.decoders.append(block)
+
+        self.sigmoid = nn.Sigmoid()
+
+    def en_make_layer(self,block_idx,in_channels, out_channels):
+        layers = []
+        if block_idx < 5:
+            if block_idx == 0:
+                layers.append(init_Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
+                layers.append(DenseBlock(out_channels,out_channels,out_channels))
+            else:
+                layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
+                layers.append(DenseBlock(out_channels,out_channels,out_channels))
+        elif block_idx == 6:
+            layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1),padding=(1,0)))
+        else:
+            layers.append(Conv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
+
+        return nn.Sequential(*layers)
+    
+    def de_make_layer(self,block_idx,in_channels, out_channels):
+        """
+        in_channels : input + skip-connection 
+        """
+        layers = []
+        if block_idx >= 2:
+            if block_idx == 6:
+                layers.append(DenseBlock(in_channels,in_channels//2,in_channels))
+                layers.append(last_Deconv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,1), padding=(1,0)))
+            else:
+                layers.append(DenseBlock(in_channels,in_channels//2,in_channels))
+                layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3), stride=(1,2),padding=(1,0)))
+        elif block_idx == 0:
+            layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3),stride=(1,1),padding=(1,0)))
+        else:
+            layers.append(DeConv2d_(in_channels,out_channels,kernel_size=(3,3),stride=(1,2),padding=(1,0)))
+
+        return nn.Sequential(*layers)
+
+
+    def forward(self,mixture,MISO1,BF):
+        mixture_real_spec = mixture.real.float() # [B,C,T,F]
+        mixture_imag_spec = mixture.imag.float() # [B,C,T,F]
+
+        MISO1_real_spec = MISO1.real.float()
+        MISO1_imag_spec = MISO1.imag.float()
+
+        BF_real_spec = BF.real.float()
+        BF_imag_spec = BF.imag.float()
+
+        real_spec = torch.cat((mixture_real_spec, MISO1_real_spec, BF_real_spec), dim= 1)
+        imag_spec = torch.cat((mixture_imag_spec, MISO1_imag_spec, BF_imag_spec), dim= 1)
+
+        #reference mic -> circular shift 고려해야 됨.
+        x = torch.cat((real_spec,imag_spec),dim=1)
+        
+        xs = []
+        for i, encoder in enumerate(self.encoders):
+            # print(i)    
+            x = encoder(x)
+            xs.append(x)
+            # print(x.shape)
+        #Reshape [B,384, T ,1] -> [B,384,T]
+        x = torch.squeeze(x)
+
+        #[B,384,T] -> [B,384,T]
+        tcn_out = self.TCN(x)
+        de_x =tcn_out
+        #Reshape [B,384,T] -> [B,384,T,1]
+        de_x = torch.unsqueeze(de_x,dim=-1)
+
+        for i, decoder in enumerate(self.decoders):
+            #[B,C,T,F] -> [B,2C,T,F]
+            de_x = torch.cat((de_x, xs[self.num_bottleneck-1-i]), dim=1)
+            de_x = decoder(de_x)
+
+        #[B,2*Spks,T,257]
+        B,Spk_realimag,T,F = de_x.size()
+        #[B,2*Spks,T,257] -> [B,Spk,T,257]
+        o_real_spec = de_x[:,0:Spk_realimag//2,:,:]
+        o_imag_spec = de_x[:,Spk_realimag//2:Spk_realimag,:,:]
+        #[B,Spk,T,257] -> [B,Spk,T,257]
+        # separate = torch.complex(o_real_spec,o_imag_spec)
+        if True in torch.isnan(o_real_spec) or True in torch.isnan(o_imag_spec):
+            pdb.set_trace()
+        return torch.complex(o_real_spec, o_imag_spec)
+
+
+
+
+
 class init_Conv2d_(nn.Module):
     def __init__(self,in_channels, out_channels, kernel_size=(3,3),stride=(1,1),padding=(1,0)):
         super(init_Conv2d_, self).__init__()

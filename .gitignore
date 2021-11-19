@@ -121,7 +121,5 @@ venv.bak/
 
 # model weight
 ./model_result/
-
 ./runs/
-
 .wav
