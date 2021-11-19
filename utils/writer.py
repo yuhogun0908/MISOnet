@@ -29,19 +29,28 @@ class MyWriter(SummaryWriter):
     def log_test(self,test_loss,step) : 
         self.add_scalar('test_loss', test_loss, step)
 
-    def log_audio(self, mix,clean1,clean2,estim1,estim2,step) : 
+    def log_audio(self,num_spks,mix,ref,estim,step) : 
         mix = self.ISTFT(mix,'mix')
-        clean1=  self.ISTFT(clean1,'clean1')
-        clean2 = self.ISTFT(clean2,'clean2')
-        estim1 = self.ISTFT(estim1,'estim1')
-        estim2 = self.ISTFT(estim2,'estim2')
+        clean_ISTFT = [[] for _ in range(num_spks)]
+        estim_ISTFT = [[] for _ in range(num_spks)]
+        for spk_idx in range(num_spks):
+            clean_ISTFT[spk_idx]= self.ISTFT(ref[spk_idx],'clean'+str(spk_idx+1))
+            estim_ISTFT[spk_idx]= self.ISTFT(estim[spk_idx],'estim'+str(spk_idx+1))
 
+
+        # clean1=  self.ISTFT(clean1,'clean1')
+        # clean2 = self.ISTFT(clean2,'clean2')
+        # estim1 = self.ISTFT(estim1,'estim1')
+        # estim2 = self.ISTFT(estim2,'estim2')
         # self.add_audio('mix', mix, step, self.config['fs'])
-        # self.add_audio('clean1', clean1, step, self.config['fs'])
-        # self.add_audio('clean2', clean2, step, self.config['fs'])
-        # self.add_audio('estim1', estim1, step, self.config['fs'])
-        # self.add_audio('estim2', estim2, step, self.config['fs'])
-        return mix, clean1, clean2, estim1, estim2
+        # for spk_idx in range(num_spks):
+            # self.add_audio('clean'+str(spk_idx+1), clean_ISTFT[spk_idx], step, self.config['fs'])
+            # self.add_audio('estim'+str(spk_idx+1), estim_ISTFT[spk_idx], step, self.config['fs'])
+            # self.add_audio('clean1', clean1, step, self.config['fs'])
+            # self.add_audio('clean2', clean2, step, self.config['fs'])
+            # self.add_audio('estim1', estim1, step, self.config['fs'])
+            # self.add_audio('estim2', estim2, step, self.config['fs'])
+        return mix, clean_ISTFT, estim_ISTFT
 
     def log_MFCC(self,input,output,clean,step):
         input = input.to('cpu')
