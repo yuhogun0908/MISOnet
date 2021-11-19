@@ -3,53 +3,86 @@
 use_tb_logger: true
 gpu_num : 0
 
-
-fs : 16000
-chunk_time : 4
-least_time : 2
-
 REVERB_2MIX:
   select_mode : 1 # 1 : train, 2: development, 3: evaluation
+  scp_list : /home/nas/user/DBhogun/NN_BSS/dataset/REVERB/etc/
+  tr_parent_wave_list : /home/nas/user/DBhogun/NN_BSS/dataset/REVERB/tr/data/
+  dt_parent_wave_list : /home/nas/user/DBhogun/NN_BSS/dataset/REVERB/dt/data/
+  saved_tr_pickle_dir : /home/data/DBhogun/REVERB/tr/
+  saved_dt_pickle_dir : /home/data/DBhogun/REVERB/dt/
+  fs : 16000
+  chunk_time : 4
+  least_time : 2
   num_spks : 2
-  scp_list : /home/nas/user/hogun/NN_BSS/dataset/REVERB/etc/
-  tr_parent_wave_list : /home/nas/user/hogun/NN_BSS/dataset/REVERB/tr/data/
-  dt_parent_wave_list : /home/nas/user/hogun/NN_BSS/dataset/REVERB/dt/data/
-  saved_tr_pickle_dir : /home/data/hogun/REVERB/tr/
-  saved_dt_pickle_dir : /home/data/hogun/REVERB/dt/
-
+  num_ch : 6
   
 RIR_mixing:
   select_mode : 1 # 1 : train, 2: development, 3: evaluation
+  scp_list : /home/nas/user/DBhogun/NN_BSS/dataset/RIR_mixing/etc/
+  tr_parent_wave_list : /home/nas/user/DBhogun/NN_BSS/dataset/RIR_mixing/tr/data/ #/home/nas/user/DBhogun/NN_BSS/dataset/RIR_mixing/tr_IITP_v1/data/
+  dt_parent_wave_list : /home/nas/user/DBhogun/NN_BSS/dataset/RIR_mixing/dt/data/ #/home/nas/user/DBhogun/NN_BSS/dataset/RIR_mixing/dt_IITP_v1/data/
+  saved_tr_pickle_dir : /home/data/DBhogun/RIR_mixing/tr/ #/home/nas3/DB/NN_BSS/RIR_mixing/tr/ #/home/data/DBhogun/RIR_mixing/tr/ #
+  saved_dt_pickle_dir : /home/data/DBhogun/RIR_mixing/dt/ #/home/nas3/DB/NN_BSS/RIR_mixing/dt/ #/home/data/DBhogun/RIR_mixing/dt/
+  fs : 16000
+  chunk_time : 4
+  least_time : 2
   num_spks : 2
-  scp_list : /home/nas/user/hogun/NN_BSS/dataset/RIR_mixing/etc/
-  tr_parent_wave_list : /home/nas/user/hogun/NN_BSS/dataset/RIR_mixing/tr/data/
-  dt_parent_wave_list : /home/nas/user/hogun/NN_BSS/dataset/RIR_mixing/dt/data/
-  saved_tr_pickle_dir : /home/data/hogun/RIR_mixing/tr/
-  saved_dt_pickle_dir : /home/data/hogun/RIR_mixing/dt/
+  num_ch : 6
 
- 
+SMS_WSJ:
+  select_mode : 1 # 1 : train, 2: development, 3: evaluation
+  rootdir : /home/nas/user/hogun/sms_wsj/test/
+  # rootdir : /home/data/DBhogun/test/
+  clean: speech_source_scaled
+  mix : observation
+  early : early
+  noise : noise
+  tail : tail
+  tr_file : train_si284
+  dev_file : cv_dev93
+  test_file : test_eval92
+  # saverootdir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/
+  saverootdir : /home/data/DBhogun/SMS_WSJ_DB
+  fs : 8000
+  chunk_time : 4
+  least_time : 2
+  num_spks : 2
+  num_ch : 6
+
+  # saved_tr_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/train/CleanMix/
+  # saved_dt_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/dev/CleanMix/
+  saved_tr_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/train/CleanMix/
+  saved_dt_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/dev/CleanMix/
+
+
 STFT:
-  fs : 16000 
+  fs : 8000 
   window : hann
-  length : 512 #32ms  #64ms
-  overlap : 128 #8ms   #16ms
+  # length : 512 #32ms  #64ms
+  # overlap : 128 #8ms   #16ms
+  length : 256 #32ms  #64ms
+  overlap : 192 #8ms   #16ms
 
 ISTFT:
-  fs : 16000
+  # fs : 16000
+  # window : hann
+  # length : 512 #32ms  #64ms
+  # overlap : 128 #8ms  #16ms
+  fs : 8000
   window : hann
-  length : 512 #32ms  #64ms
-  overlap : 128 #8ms   #16ms
+  length : 256 #32ms  #64ms
+  overlap : 192 #8ms  #16ms
 
 dataloader:
   Train:
-    batch_size: 16
+    batch_size: 12
     shuffle: True
-    num_workers: 8
+    num_workers: 40
 
   Development:
-    batch_size: 16
+    batch_size: 10
     shuffle: False
-    num_workers: 8
+    num_workers: 40
   
   TestMISO_1:
     batch_size : 1
@@ -63,15 +96,31 @@ dataloader:
 
 # #### network structures
 MISO_1:
-  num_bottleneck : 8
-  en_bottleneck_channels : [12,24,32,32,32,32,64,128,384] # 16: 2*Ch 
-  de_bottleneck_channels : [384,128,64,32,32,32,32,24,4]  # 4: 2*Spk
-  Ch : 6  # number of mic
-  Spk : 2 # number of speaker
+  # num_bottleneck : 8
+  # en_bottleneck_channels : [24,32,32,32,32,64,128,384] # 12: 2*Ch 
+  # de_bottleneck_channels : [384,128,64,32,32,32,32,24]  # 4: 2*Spk
+  # norm_type : IN  #Instance Norm
+
+  num_bottleneck : 7
+  en_bottleneck_channels : [24,32,32,32,32,64,128] # 12: 2*Ch 
+  de_bottleneck_channels : [128,64,32,32,32,32,24]  # 4: 2*Spk
   norm_type : IN  #Instance Norm
 
+MISO_2:
+  num_bottleneck : 7
+  en_bottleneck_channels : [24,32,32,32,32,64,128] # 12: 2*Ch 
+  de_bottleneck_channels : [128,64,32,32,32,32,24]  # 4: 2*Spk
+  norm_type : IN  #Instance Norm
+
+MISO_3:
+  num_bottleneck : 7
+  en_bottleneck_channels : [24,32,32,32,32,64,128] # 12: 2*Ch 
+  de_bottleneck_channels : [128,64,32,32,32,32,24]  # 4: 2*Spk
+  norm_type : IN  #Instance Norm
+
+
 #### Optimizer settings
-trainer:
+trainer_sp:
   epochs : 100
   device : 1
   half_lr : True
@@ -79,14 +128,29 @@ trainer:
   clipping : False
   max_norm : 5.0 # Gradient norm threshold to clip
   print_freq : 10 #frequency of printing training info
-  save_folder : model_result/8014_PIT
+  save_folder : model_result/1115_MISO1_targetScaled_overlap3_4_stftScalerevise
+  model_path : bestmodel.pth.tar
+  check_point : [True,5] # Enables checkpoint saving of model per 10epochs
+  model_load : [False,'./model_result/IITP/epoch11.pth.tar']
+
+trainer_en:
+  epochs : 100
+  device : 1
+  half_lr : True
+  early_stop : True # early training when no improvement for 10 epochs
+  clipping : False
+  max_norm : 5.0 # Gradient norm threshold to clip
+  print_freq : 10 #frequency of printing training info
+  MISO1_path : model_result/1022_MISO1_targetScaled/bestmodel.pth.tar
+
+  save_folder : model_result/1103_MISO2
   model_path : bestmodel.pth.tar
   check_point : [True,10] # Enables checkpoint saving of model per 10epochs
-  model_load : [False,'./model_result/8011_original_v1/bestmodel.pth.tar']
+  model_load : [False,'./model_result/IITP/epoch11.pth.tar']
 
 tester:
   device: 1
-  model_load : [True,'./model_result/8012/bestmodel.pth.tar']
+  model_load : [True,'./model_result/8014_PIT/bestmodel.pth.tar']
 
 
 optimizer:
@@ -100,3 +164,5 @@ scheduler:
     factor : 0.5
     patience : 3  #-> 논문 3
     min_lr : 0.000005
+
+check_MISO1: True
