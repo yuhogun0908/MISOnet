@@ -19,6 +19,8 @@ from scipy.linalg import eigh
 import scipy 
 from pathlib import Path
 import pickle
+from tqdm import tqdm
+import random
 
 class Trainer_Separate(object):
     def __init__(self,dataset, num_spks, tr_loader,dt_loader,model, optimizer,scheduler,config,device,log_path):
@@ -69,7 +71,7 @@ class Trainer_Separate(object):
 
     def train(self):
         for epoch in tqdm(range(self.start_epoch, self.config['trainer_sp']['epochs'])):
-            print('Training...')
+            print('Separate Training Start ...')
             start = time.time()
             self.model.train()
             tr_avg_loss_epoch = self._run_one_epoch(epoch,training=True)
@@ -232,9 +234,10 @@ class Trainer_Beamforming(object):
         self.Spks = config[dataset]['num_spks']
         self.device = device
         #MISO1 separation model load
-        self.MISO1_path = config['trainer_en']['MISO1_path']
+        self.MISO1_path = config['trainer_beamform']['MISO1_path']
         self._load()
-        self.check_MISO1 = config['check_MISO1']
+        self.check_MISO1 = config['trainer_beamform']['check_output']
+        self.saveOutput = config['trainer_beamform']['save_output']
         self.log_path = log_path
         self.writter = MyWriter(self.config, self.log_path)
 
@@ -246,7 +249,7 @@ class Trainer_Beamforming(object):
         self.model_sep.load_state_dict(package['model_state_dict'])
 
     def train(self):
-        print('Training...')
+        print('Beaforming Start...')
         start = time.time()
         tr_avg_loss_epoch = self._run_one_epoch(0,training=True)
            
@@ -352,7 +355,7 @@ class Trainer_Beamforming(object):
         start = time.time()
         data_loader = self.tr_loader if training else self.dt_loader
 
-        for idx, (data) in enumerate(data_loader):
+        for idx, (data) in tqdm(enumerate(data_loader)):
             
             """
             Input : 
@@ -364,7 +367,7 @@ class Trainer_Beamforming(object):
                             type : pickle 
             """
             #################################################################################
-            mix_stft, ref_stft, BeamOutDir = data
+            mix_stft, ref_stft, BeamOutDir, MISO1OutDir = data
             mix_stft = mix_stft.cuda(self.device)
             # reference mic 1 : Train
             ref_stft_1ch = [ [] for _ in range(self.num_spks)]
@@ -434,8 +437,8 @@ class Trainer_Beamforming(object):
                     else:
                         ref_ = torch.cat((ref_,ref_stft_1ch[spk_idx]), dim=1)
 
-                s_ref = torch.unsqueeze(ref_, dim=1)
-                magnitude_distance = torch.sum(torch.abs(ref_magnitude - abs(s_ref)),[3,4])
+                s_estimate_sources = torch.unsqueeze(ref_, dim=1)
+                magnitude_distance = torch.sum(torch.abs(ref_magnitude - abs(s_estimate_sources)),[3,4])
                 perms = ref_.new_tensor(list(permutations(range(self.Spks))), dtype=torch.long) #[[0,1],[1,0]]
                 index = torch.unsqueeze(perms, dim=2)
                 perms_one_hot = ref_.new_zeros((*perms.size(), self.Spks), dtype=torch.float).scatter_(2,index,1)
@@ -580,69 +583,128 @@ class Trainer_Beamforming(object):
             # s2_beamformer = self.blind_analytic_normalization(s2_beamformer,s2_SCMn)
             s2_beamout = self.apply_beamformer(s2_beamformer,mix_stft)
 
+            if self.saveOutput:
+                hann_win = scipy.signal.get_window('hann', self.config['ISTFT']['length'])
+                scale = np.sqrt(1.0 / hann_win.sum()**2)
+                MAX_INT16 = np.iinfo(np.int16).max
+
+                # Save MISO1 Output to pickle format
+                for fileIdx in range(0,len(MISO1OutDir)):
+                    fileRoot = MISO1OutDir[fileIdx]
+                    if fileIdx == 0:
+                        parentRoot = Path(MISO1OutDir[fileIdx]).parent.absolute()
+                        parentRoot.mkdir(exist_ok = True, parents = True)
+                    
+                    s1_MISO1_ = np.transpose(s1_ch6,[0,2,1,3])
+                    s1_MISO1_ = s1_MISO1_ * scale
+                    s1_t_sig = self.ISTFT(s1_MISO1_[fileIdx,...])
+                    s1_t_sig = s1_t_sig * MAX_INT16
+                    s1_t_sig = s1_t_sig.astype(np.int16)
+
+                    s2_MISO1_ = np.transpose(s2_ch6,[0,2,1,3])
+                    s2_MISO1_ = s2_MISO1_ * scale
+                    s2_t_sig = self.ISTFT(s2_MISO1_[fileIdx,...])
+                    s2_t_sig = s2_t_sig * MAX_INT16
+                    s2_t_sig = s2_t_sig.astype(np.int16)
+
+                    sf.write(str(fileRoot).replace('.pickle', '_s1.wav'),s1_t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+                    sf.write(str(fileRoot).replace('.pickle', '_s2.wav'),s2_t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+                    
+                    # s_dict = {'s1_MISO1': s1_t_sig, 's2_MISO1': s2_t_sig}
+                    # with open(str(fileRoot), 'wb') as f:
+                        # pickle.dump(s_dict, f)
+                # f.close()
+            
+                # Save MVDR beamformer Ouput to pickle format
+                for fileIdx in range(0,len(BeamOutDir)):
+                    fileRoot = BeamOutDir[fileIdx]
+                    if fileIdx == 0:
+                        parentRoot = Path(BeamOutDir[fileIdx]).parent.absolute()
+                        parentRoot.mkdir(exist_ok = True, parents = True)
+                    
+                    s1_beamout_ = s1_beamout * scale
+                    s1_bf_t_sig = self.ISTFT(s1_beamout_[fileIdx,...])
+                    s1_bf_t_sig = s1_bf_t_sig * MAX_INT16
+                    s1_bf_t_sig = s1_bf_t_sig.astype(np.int16)
+
+                    s2_beamout_ = s2_beamout * scale
+                    s2_bf_t_sig = self.ISTFT(s2_beamout_[fileIdx,...])
+                    s2_bf_t_sig = s2_bf_t_sig * MAX_INT16
+                    s2_bf_t_sig = s2_bf_t_sig.astype(np.int16)
+
+                    sf.write(str(fileRoot).replace('.pickle', '_s1.wav'),s1_bf_t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+                    sf.write(str(fileRoot).replace('.pickle', '_s2.wav'),s2_bf_t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+
+                    pdb.set_trace()
+                
+                #     s_dict = {'s1_BF': s1_t_sig, 's2_BF': s2_t_sig}
+                #     with open(str(fileRoot), 'wb') as f:
+                #         pickle.dump(s_dict, f)
+                # f.close()
+
+                print('Save Output {} / {} ----- {}%'.format(idx, len(data_loader), (idx//len(data_loader)*100) ))
+
             if self.check_MISO1:
 
-                ''' Check the result of MISO1 '''
-                hann_win = scipy.signal.get_window('hann', 256)
-                scale = np.sqrt(1.0 / hann_win.sum()**2)
-                import torchaudio
-                import soundfile as sf
+                ''' Check the result of MISO1 '''                
                 mix_stft = mix_stft * scale
                 t_sig = self.ISTFT(mix_stft[0,:,:,:].swapaxes(0,1))
                 MAX_INT16 = np.iinfo(np.int16).max
-                t_sig=  t_sig * 2**15
+                t_sig=  t_sig * MAX_INT16
                 t_sig = t_sig.astype(np.int16)
                 sf.write('mix.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
 
+                s1_MISO1 =  np.transpose(s1_ch6,[0,2,1,3])         
+                s1_MISO1 = s1_MISO1 * scale
+                t_sig = self.ISTFT(s1_MISO1[0,0,...])
+                MAX_INT16 = np.iinfo(np.int16).max
+                t_sig=  t_sig * MAX_INT16
+                t_sig = t_sig.astype(np.int16)
+                sf.write('MISO1.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+
+                s2_MISO1 =  np.transpose(s2_ch6,[0,2,1,3])         
+                s2_MISO1 = s2_MISO1 * scale
+                t_sig = self.ISTFT(s2_MISO1[0,0,...])
+                MAX_INT16 = np.iinfo(np.int16).max
+                t_sig=  t_sig * MAX_INT16
+                t_sig = t_sig.astype(np.int16)
+                sf.write('MISO2.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
 
                 s1_beamout = s1_beamout * scale
                 t_sig = self.ISTFT(s1_beamout[0,...])
                 MAX_INT16 = np.iinfo(np.int16).max
-                t_sig=  t_sig * 2**15
+                t_sig=  t_sig * MAX_INT16
                 t_sig = t_sig.astype(np.int16)
                 sf.write('e1.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
                 
                 s2_beamout = s2_beamout * scale
                 t_sig = self.ISTFT(s2_beamout[0,...])
                 MAX_INT16 = np.iinfo(np.int16).max
-                t_sig=  t_sig * 2**15
+                t_sig=  t_sig * MAX_INT16
                 t_sig = t_sig.astype(np.int16)
                 sf.write('e2.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+
+                s1_clean = ref_stft_1ch[0]
+                s1_clean = torch.permute(s1_clean,[0,1,3,2]).detach().cpu().numpy()         
+                s1_clean = s1_clean * scale
+                t_sig = self.ISTFT(s1_clean[0,...])
+                MAX_INT16 = np.iinfo(np.int16).max
+                t_sig=  t_sig * MAX_INT16
+                t_sig = t_sig.astype(np.int16)
+                sf.write('clean1.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+
+                s2_clean = ref_stft_1ch[1]
+                s2_clean = torch.permute(s2_clean,[0,1,3,2]).detach().cpu().numpy()         
+                s2_clean = s2_clean * scale
+                t_sig = self.ISTFT(s2_clean[0,...])
+                MAX_INT16 = np.iinfo(np.int16).max
+                t_sig=  t_sig * MAX_INT16
+                t_sig = t_sig.astype(np.int16)
+                sf.write('clean2.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
+
+                pdb.set_trace()
                 
-                # b_idx = 0
-                # mix_test = mix_stft[b_idx,:,0,:]
-                # ref_test = [ np.transpose(ref_sig[b_idx,0,:,:].cpu().detach().numpy(),[1,0]) for ref_sig in ref_stft_1ch]
-                # estimate_test = [ np.transpose(estim_sig.cpu().detach().numpy(),[1,0]) for estim_sig in estimate_sources[b_idx,:,:,:]]
-                # estimate_test[0] = s1_beamout[b_idx,:,:]
-                # estimate_test[1] = s2_beamout[b_idx,:,:]
-                # mix, clean, estim = self.writter.log_audio(self.num_spks,mix_test,ref_test,estimate_test,epoch+1)
-                # import soundfile as sf
-                # sf.write('clean1.nwav',clean[0],8000,'PCM_24')
-                # sf.write('clean2.wav',clean[1],8000,'PCM_24')
-                # sf.write('mix.wav',mix,8000,'PCM_24')
-                # sf.write('estim1.wav',estim[0],8000,'PCM_24')
-                # sf.write('estim2.wav',estim[1],8000,'PCM_24')
-                
-                # estimate_test = [ np.transpose(estim_sig.cpu().detach().numpy(),[1,0]) for estim_sig in estimate_sources[b_idx,:,:,:]]
-                # mix, clean, estim = self.writter.log_audio(self.num_spks,mix_test,ref_test,estimate_test,epoch+1)
-                # sf.write('MISO1_1.wav',estim[0],8000,'PCM_24')
-                # sf.write('MISO1_2.wav',estim[1],8000,'PCM_24')
-
-            s1_beamout = torch.permute(torch.from_numpy(s1_beamout), [0,2,1])
-            s2_beamout = torch.permute(torch.from_numpy(s2_beamout), [0,2,1])
-
-            ''' Save Beamforming output '''
-            for fileIdx in range(0,len(BeamOutDir)):
-                fileRoot = BeamOutDir[fileIdx]
-                if fileIdx == 0:
-                    ParentRoot = Path(BeamOutDir[fileIdx]).parent.absolute()
-                    ParentRoot.mkdir(exist_ok = True, parents = True)
-                s_dict = {'S1_BF': s1_beamout[fileIdx,...], 'S2_BF': s2_beamout[fileIdx,...]}
-                with open(str(fileRoot), 'wb') as f:
-                    pickle.dump(s_dict, f)
-            f.close()
-
-            pdb.set_trace()
+        print('Beaforming Finished')
 
         return 
 
@@ -662,14 +724,13 @@ class Trainer_Beamforming(object):
 
 
 class Trainer_Enhance(object):
-    def __init__(self,dataset,enhanceModelType, num_spks, tr_loader,dt_loader,model_sep, model, optimizer,scheduler,config,device,log_path):
+    def __init__(self,dataset,enhanceModelType, num_spks, tr_loader,dt_loader, model, optimizer,scheduler,config,device,log_path):
         self.num_spks = num_spks
         self.tr_loader = tr_loader
         self.dt_loader = dt_loader
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.config = config
-        self.model_sep = model_sep
         self.model = model
         model_parameters = filter(lambda p: p.requires_grad, model.parameters())
         params = sum([np.prod(p.size()) for p in model_parameters])
@@ -679,9 +740,6 @@ class Trainer_Enhance(object):
         self.enhanceModelType = enhanceModelType
         self.device = device
         self.log_path = log_path
-        #MISO1 separation model load
-        self.MISO1_path = config['trainer_en']['MISO1_path']
-        self._load()
 
         #from visdom import Visdom
         self.tr_avg_loss = torch.Tensor(config['trainer_en']['epochs'])
@@ -696,13 +754,7 @@ class Trainer_Enhance(object):
         self.audiowritter = SummaryWriter(self.log_path+'_audio')
         self.writter = MyWriter(self.config, self.log_path)
         self.clip_norm = config['trainer_en']['clipping']
-        self.check_MISO1 = config['check_MISO1']
-    def _load(self):
-        ''' Load pretrained MISO1 '''
-        print('Loading MISO_1 model %s'% self.MISO1_path)
-        package = torch.load(self.MISO1_path, map_location="cuda:"+str(self.device))
-        self.model_sep.load_state_dict(package['model_state_dict'])
-
+        
     def _reset(self):
         # model load, tr&val loss, optimizer, 시작 epoch 추가
 
@@ -722,9 +774,10 @@ class Trainer_Enhance(object):
         self.val_no_impv = 0
         self.halving = False
 
+  
     def train(self):
         for epoch in tqdm(range(self.start_epoch, self.config['trainer_en']['epochs'])):
-            print('Training...')
+            print('Enhance Training Start...')
             start = time.time()
             self.model.train()
             tr_avg_loss_epoch = self._run_one_epoch(epoch,training=True)
@@ -750,6 +803,7 @@ class Trainer_Enhance(object):
                     print('Saving checkpoint model to %s' % file_path)
             print('validation...')
             self.model.eval()
+            
             val_avg_loss_epoch = self._run_one_epoch(epoch,training=False)
             print('-'* 85)
             print('Valid Summary | End of Epoch {0} | Time {1:.2f}s |'
@@ -793,121 +847,51 @@ class Trainer_Enhance(object):
         # writter.close()
     
     def _run_one_epoch(self, epoch, training= True):
-        self.model_sep.eval()
-
         start = time.time()
         total_loss = 0
         loss = 0
         data_loader = self.tr_loader if training else self.dt_loader
-
+        
         for idx, (data) in enumerate(data_loader):
             
             """
-            Input : [B,Mic,T,F]
-            """
-            mix_stft, ref_stft, s1_bf, s2_bf = data
-            pdb.set_trace()
-            mix_stft = mix_stft.cuda(self.device)
-            s1_bf = s1_bf.cuda(self.device)
-            s2_bf = s2_bf.cuda(self.device)
-        
-            # reference mic 1 : Train
-            ref_stft_1ch = [ [] for _ in range(self.num_spks)]
-            for spk_idx in range(self.num_spks):
-                #[B,1,T,F]
-                ref_stft_1ch[spk_idx] = ref_stft[spk_idx][:,0,:,:].cuda(self.device)
-                ref_stft_1ch[spk_idx] = torch.unsqueeze(ref_stft_1ch[spk_idx], dim=1)
+            MISO2 or MISO3 Train
 
-            for spk_idx in range(self.num_spks):
-                ref_stft[spk_idx] = ref_stft[spk_idx].cuda(self.device)
-            B, Mic, T, F = mix_stft.size()
-
-            ''' Source Alignment across Microphones'''
-            s1_ch6 = torch.empty(B,Mic,T,F, dtype=torch.complex64)
-            s2_ch6 = torch.empty(B,Mic,T,F, dtype=torch.complex64)
-            ref1 = torch.empty(B,1,T,F, dtype=torch.complex64)
-            ref2 = torch.empty(B,1,T,F, dtype=torch.complex64)
-
-            with torch.set_grad_enabled(False):
-                ref_sources = self.model_sep(mix_stft) #[B,Spk,T,F]
-    
-            #######################################
-            ''' Source-wise Alignment ''' 
-            ## Source wise alignment 기능 정상 작동
-            #######################################
-            s1_ch6[:,0,:,:] = ref_sources[:,0,:,:] 
-            s2_ch6[:,0,:,:] = ref_sources[:,1,:,:]
+            Input : 
+                    mix_stft      :  [B, Mic, T, F]
+                    ref_stft : list, [2], ref
+            Output :
+                    s1_MISO1, s2_MISO2 :  [B, Mic, T, F]
+                       s1_bf, s2_bf    :  [B, Mic, T, F]
+                        Enhance_out    :  [B, Sources, T, F] 
             
-            s_ref_sources = torch.unsqueeze(ref_sources,dim=2) #[B,Spks,1,T,F]
-            ref_magnitude = torch.abs(torch.sqrt(s_ref_sources.real**2 + s_ref_sources.imag**2)) #[B,Spks,1,T,F]
-            with torch.set_grad_enabled(False):
-                for ref_mic in range(1,Mic):
-                    # Select the reference microphone by circular shifting the microphone
-                    # [Yq, ... , Yp, ... , Yq-1]
-                    
-                    s_mix_stft = torch.roll(mix_stft,-ref_mic, dims=1)
-                    estimate_sources = self.model_sep(s_mix_stft) #[B,Spks,T,F]
-                    # calculate magnitude distance between ref mic and non ref mic
-                    s_estimate_sources = torch.unsqueeze(estimate_sources,dim=1) #[B,1,Spks,T,F]
-                    magnitude_distance = torch.sum(torch.abs(ref_magnitude - abs(s_estimate_sources)),[3,4]) #[B,Spks,Spks,T,F]
-                    
-                    perms = estimate_sources.new_tensor(list(permutations(range(self.Spks))), dtype=torch.long) #[[0,1],[1,0]]
-                    index = torch.unsqueeze(perms, dim=2)
-                    perms_one_hot = estimate_sources.new_zeros((*perms.size(), self.Spks), dtype=torch.float).scatter_(2,index,1)
+            """
 
-                    batchwise_distance = torch.einsum('bij,pij->bp',[magnitude_distance, perms_one_hot])
-                    min_distance_idx = torch.argmin(batchwise_distance,dim=1)
+            mix_stft, ref_stft, MISO1_stft, Beamform_stft = data
+            mix_stft = mix_stft.cuda(self.device)
+        
+            
+            ref1 = torch.unsqueeze(ref_stft[0][:,0,:,:], dim=1).cuda(self.device)
+            ref2 = torch.unsqueeze(ref_stft[1][:,0,:,:], dim=1).cuda(self.device)
+            Reference_sources = torch.cat((ref1.detach().cpu(), ref2.detach().cpu()), dim=1)
+            
+            s1_bf = Beamform_stft[0].cuda(self.device)
+            s2_bf = Beamform_stft[1].cuda(self.device)
+            Beamform_sources = torch.cat((s1_bf.detach().cpu(), s2_bf.detach().cpu()), dim=1)
 
-                    for ii in range(B):
-                        if min_distance_idx[ii] == 1:
-                            s1_ch6[ii,ref_mic,:,:] = estimate_sources[ii,1,:,:]
-                            s2_ch6[ii,ref_mic,:,:] = estimate_sources[ii,0,:,:]
-                        else:
-                            s1_ch6[ii,ref_mic,:,:] = estimate_sources[ii,0,:,:]
-                            s2_ch6[ii,ref_mic,:,:] = estimate_sources[ii,1,:,:]
+            MISO1_spk1= torch.unsqueeze(MISO1_stft[0][:,0,:,:],dim=1).cuda(self.device)
+            MISO1_spk2= torch.unsqueeze(MISO1_stft[1][:,0,:,:],dim=1).cuda(self.device)
+            MISO1_sources = torch.cat((MISO1_spk1.detach().cpu(), MISO1_spk2.detach().cpu()), dim=1)
 
-                # calculate magnitude distance between ref mic and target signal
-
-                for spk_idx in range(self.num_spks):
-                    if spk_idx == 0 :
-                        ref_ = ref_stft_1ch[spk_idx]
-                    else:
-                        ref_ = torch.cat((ref_,ref_stft_1ch[spk_idx]), dim=1)
-
-                s_ref = torch.unsqueeze(ref_, dim=1)
-                magnitude_distance = torch.sum(torch.abs(ref_magnitude - abs(s_ref)),[3,4])
-                perms = ref_.new_tensor(list(permutations(range(self.Spks))), dtype=torch.long) #[[0,1],[1,0]]
-                index = torch.unsqueeze(perms, dim=2)
-                perms_one_hot = ref_.new_zeros((*perms.size(), self.Spks), dtype=torch.float).scatter_(2,index,1)
-                batchwise_distance = torch.einsum('bij,pij->bp',[magnitude_distance, perms_one_hot])
-                min_distance_idx = torch.argmin(batchwise_distance, dim=1)
-
-                for ii in range(B):
-                    if min_distance_idx[ii] == 1:
-                        ref1[ii,...] = ref_[ii,1,:,:]
-                        ref2[ii,...] = ref_[ii,0,:,:]
-                    else:
-                        ref1[ii,...] = ref_[ii,0,:,:]
-                        ref2[ii,...] = ref_[ii,1,:,:]
-                ref1 = ref1.cuda(self.device)
-                ref2 = ref2.cuda(self.device)
-            s1_ch6 = s1_ch6.cuda(self.device) # B, Ch, T, F
-            s2_ch6 = s2_ch6.cuda(self.device)
-
-
-            # ###########################################################################################
-            # Temp code
-            # mix_stft, ref_stft, s1_bf, s2_bf, s1_ch6, s2_ch6 = data
-            # mix_stft = mix_stft.cuda(self.device)
-            # s1_bf = s1_bf.cuda(self.device)
-            # s2_bf = s2_bf.cuda(self.device)
-            # s1_ch6 = s1_ch6.cuda(self.device)
-            # s2_ch6 = s2_ch6.cuda(self.device)
-            # ###########################################################################################
 
             if self.enhanceModelType == 'MISO3':
                 ''' MISO3 Enhancement train '''
-                estimate_sources_MISO3_s1 = self.model(mix_stft, torch.unsqueeze(s1_bf, dim=1), torch.unsqueeze(s1_ch6[:,0,...],dim=1))
+                if not training:
+                    with torch.no_grad():
+                        estimate_sources_MISO3_s1 = self.model(mix_stft, s1_bf, MISO1_spk1)
+                else:
+                    estimate_sources_MISO3_s1 = self.model(mix_stft, s1_bf, MISO1_spk1)
+                    
                 loss_s1 = loss_Enhance(estimate_sources_MISO3_s1, ref1)
                 if training:
                     self.optimizer.zero_grad()
@@ -917,7 +901,13 @@ class Trainer_Enhance(object):
                     self.optimizer.step()
                 total_loss += loss_s1.item()/2
 
-                estimate_sources_MISO3_s2 = self.model(mix_stft, torch.unsqueeze(s2_beamout, dim=1), torch.unsqueeze(s2_ch6[:,0,...], dim=1))
+
+                if not training:
+                    with torch.no_grad():
+                        estimate_sources_MISO3_s2 = self.model(mix_stft, s2_bf, MISO1_spk2)
+                else:
+                    estimate_sources_MISO3_s2 = self.model(mix_stft, s1_bf, MISO1_spk2)
+                    
                 loss_s2 = loss_Enhance(estimate_sources_MISO3_s2, ref2)
                 if training:
                     self.optimizer.zero_grad()
@@ -926,10 +916,16 @@ class Trainer_Enhance(object):
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['trainer_sp']['max_norm'])
                     self.optimizer.step()
                 total_loss += loss_s2.item()/2
+
             else:
                 ''' MISO2 Enhancement train '''
-                estimate_sources_MISO2 = self.model(mix_stft, torch.unsqueeze(s1_bf, dim=1), torch.unsqueeze(s2_beamout, dim=1), torch.unsqueeze(s1_ch6[:,0,...],dim=1), torch.unsqueeze(s2_ch6[:,0,...], dim=1))
-                loss = loss_uPIT(self.num_spks, estimate_sources_MISO2, ref_stft_1ch)
+                if not training:
+                    with torch.no_grad():
+                        estimate_sources_MISO2 = self.model(mix_stft, s1_bf, s2_bf, MISO1_spk1, MISO1_spk2)
+                else:
+                    estimate_sources_MISO2 = self.model(mix_stft, s1_bf, s2_bf, MISO1_spk1, MISO1_spk2)
+
+                loss = loss_uPIT(self.num_spks, estimate_sources_MISO2, torch.cat((ref1,ref2), dim=1))
                 if training:
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -938,40 +934,63 @@ class Trainer_Enhance(object):
                     self.optimizer.step()
                 total_loss += loss.item()/2
 
+
             if not training and idx == 0:
                 if self.enhanceModelType == 'MISO3':
-                    Enhance_out = torch.cat((estimate_sources_MISO3_s1, estimate_sources_MISO3_s2), dim=1) # B Ch T F
+                    Enhance_out = torch.cat((estimate_sources_MISO3_s1.detach().cpu(), estimate_sources_MISO3_s2.detach().cpu()), dim=1) # B Ch T F
                 else:
                     Enhance_out = estimate_sources_MISO2
 
                 # [B,1,T,F] -> [T,F]
-                mix_test = np.transpose(mix_stft[0,0,:,:].cpu().detach().numpy(),[1,0])
-                ref_test = [ np.transpose(ref_sig[0,0,:,:].cpu().detach().numpy(),[1,0]) for ref_sig in ref_stft_1ch]
-                estimate_test = [ np.transpose(estim_sig.cpu().detach().numpy(),[1,0]) for estim_sig in Enhance_out[0,:,:,:]]
+                batch_idx = random.randint(0,mix_stft.shape[0]-1)
+                mix_test = np.transpose(mix_stft[batch_idx,0,:,:].cpu().detach().numpy(),[1,0])
+                ref_test = [ np.transpose(ref_sig.numpy(),[1,0]) for ref_sig in Reference_sources[batch_idx,...]]
+                MISO1_test = [ np.transpose(MISO1_sig.numpy(),[1,0]) for MISO1_sig in MISO1_sources[batch_idx,...]]
+                Beamform_test = [np.transpose(Beamform_sig.numpy(), [1,0]) for Beamform_sig in Beamform_sources[batch_idx,...]]
+                Enhance_test = [ np.transpose(estim_sig.numpy(),[1,0]) for estim_sig in Enhance_out[batch_idx,:,:,:]]
+                
 
                 self.writter.log_spec(mix_test,'mix',epoch+1)
                 for spk_idx in range(self.num_spks):
-                    self.writter.log_spec(ref_test[spk_idx],'clean'+str(spk_idx+1),epoch+1)
-                    # self.writter.log_spec(ref2_test,'clean2',epoch+1)
-                    self.writter.log_spec(estimate_test[spk_idx],'enhance'+str(spk_idx+1),epoch+1)
-                    # self.writter.log_spec(estim2_test,'estim2',epoch+1) 
-                mix, clean, estim = self.writter.log_audio(self.num_spks,mix_test,ref_test,estimate_test,epoch+1)
+                    self.writter.log_spec(ref_test[spk_idx],'clean_'+str(spk_idx+1),epoch+1)
+                    self.writter.log_spec(MISO1_test[spk_idx],'MISO1_'+ str(spk_idx+1), epoch+1)
+                    self.writter.log_spec(Beamform_test[spk_idx],'Beamform_'+str(spk_idx+1), epoch+1)
+                    if self.enhanceModelType == 'MISO3':
+                        self.writter.log_spec(Enhance_test[spk_idx],'MISO3_'+str(spk_idx+1),epoch+1)
+                    else:
+                        self.writter.log_spec(Enhance_test[spk_idx],'MISO2_'+str(spk_idx+1),epoch+1)
+                    
+                mix, clean, separate, beamform, enhance  = self.writter.log_audio_v2(self.num_spks, mix_test, ref_test, MISO1_test, Beamform_test, Enhance_test, epoch+1)
+                
 
                 self.audiowritter.add_audio('mix', mix/max(abs(mix)), epoch+1, self.config[self.dataset]['fs'])
                 for spk_idx in range(self.num_spks):
                     self.audiowritter.add_audio('clean'+str(spk_idx+1), clean[spk_idx]/max(abs(clean[spk_idx])), epoch+1, self.config[self.dataset]['fs'])
-                    self.audiowritter.add_audio('estim'+str(spk_idx+1), estim[spk_idx]/max(abs(estim[spk_idx])), epoch+1, self.config[self.dataset]['fs'])
-            
-            if idx % self.config['trainer_en']['print_freq'] == 0:
-                print('Epoch {0} | Iter {1} | Average Loss {2:.3f} |'
-                        'Current Loss {3:6f} | {4:.1f} ms/batch'.format(
-                            epoch + 1, idx+1, total_loss / (idx+1), 
-                            loss_s1.item()/2 + loss_s2.item()/2, 1000*(time.time()-start)/(idx+1)),
-                            flush = True)
+                    self.audiowritter.add_audio('MISO1_'+str(spk_idx+1), separate[spk_idx]/max(abs(separate[spk_idx])), epoch+1, self.config[self.dataset]['fs'])
+                    self.audiowritter.add_audio('Beamform_'+str(spk_idx+1), beamform[spk_idx]/max(abs(beamform[spk_idx])), epoch+1, self.config[self.dataset]['fs'])
+                    if self.enhanceModelType == 'MISO3':
+                        self.audiowritter.add_audio('MISO3_'+str(spk_idx+1), enhance[spk_idx]/max(abs(enhance[spk_idx])), epoch+1, self.config[self.dataset]['fs'])
+                    else:
+                        self.audiowritter.add_audio('MISO2_'+str(spk_idx+1), enhance[spk_idx]/max(abs(enhance[spk_idx])), epoch+1, self.config[self.dataset]['fs'])
+
+            if training :    
+                if idx % self.config['trainer_en']['print_freq'] == 0:
+                    print('[Train] Epoch {0} | Iter {1} | Average Loss {2:.3f} |'
+                            'Current Loss {3:6f} | {4:.1f} ms/batch'.format(
+                                epoch + 1, idx+1, total_loss / (idx+1), 
+                                loss_s1.item()/2 + loss_s2.item()/2, 1000*(time.time()-start)/(idx+1)),
+                                flush = True)
+            else:
+                if idx % self.config['trainer_en']['print_freq'] == 0:
+                    print('[Evaluation] Epoch {0} | Iter {1} | Average Loss {2:.3f} |'
+                            'Current Loss {3:6f} | {4:.1f} ms/batch'.format(
+                                epoch + 1, idx+1, total_loss / (idx+1), 
+                                loss_s1.item()/2 + loss_s2.item()/2, 1000*(time.time()-start)/(idx+1)),
+                                flush = True)
 
         return total_loss /(idx+1)
 
-    def ISTFT(self,FT_sig,index): 
+    def ISTFT(self,FT_sig): 
 
         '''
         input : [F,T]
@@ -983,11 +1002,4 @@ class Trainer_Enhance(object):
         fs = self.config['ISTFT']['fs']; window = self.config['ISTFT']['window']; nperseg=self.config['ISTFT']['length']; noverlap=self.config['ISTFT']['overlap']
         _, t_sig = signal.istft(FT_sig,fs=fs, window=window, nperseg=nperseg, noverlap=noverlap) #[C,F,T] -> [T,C]
 
-
-        MAX_INT16 = np.iinfo(np.int16).max
-        t_sig=  t_sig * 2**15
-        t_sig = t_sig.astype(np.int16)
-        sf.write('sample'+index+'.wav',t_sig.T, self.config['ISTFT']['fs'],'PCM_24')
-
         return t_sig
-

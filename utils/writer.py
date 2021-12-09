@@ -51,6 +51,20 @@ class MyWriter(SummaryWriter):
             # self.add_audio('estim1', estim1, step, self.config['fs'])
             # self.add_audio('estim2', estim2, step, self.config['fs'])
         return mix, clean_ISTFT, estim_ISTFT
+    def log_audio_v2(self, num_spks, mix, ref, Separate, Beamform, Enhance, step):
+        mix = self.ISTFT(mix,'mix')
+        clean_ISTFT = [[] for _ in range(num_spks)]
+        Separate_ISTFT = [[] for _ in range(num_spks)]
+        Beamform_ISTFT = [[] for _ in range(num_spks)]
+        Enhance_ISTFT = [[] for _ in range(num_spks)]
+
+        for spk_idx in range(num_spks):
+            clean_ISTFT[spk_idx]= self.ISTFT(ref[spk_idx],'clean'+str(spk_idx+1))
+            Separate_ISTFT[spk_idx]= self.ISTFT(Separate[spk_idx],'estim'+str(spk_idx+1))
+            Beamform_ISTFT[spk_idx]= self.ISTFT(Beamform[spk_idx],'estim'+str(spk_idx+1))
+            Enhance_ISTFT[spk_idx]= self.ISTFT(Enhance[spk_idx],'estim'+str(spk_idx+1))
+
+        return mix, clean_ISTFT, Separate_ISTFT, Beamform_ISTFT, Enhance_ISTFT
 
     def log_MFCC(self,input,output,clean,step):
         input = input.to('cpu')

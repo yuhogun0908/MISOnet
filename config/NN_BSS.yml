@@ -38,9 +38,21 @@ SMS_WSJ:
   early : early
   noise : noise
   tail : tail
+  MISO1 : MISO1
+  Beamforming : Beamforming
   tr_file : train_si284
   dev_file : cv_dev93
   test_file : test_eval92
+
+  save_flag :
+    clean : False
+    mix : False
+    noise : True
+    tail : False
+    early : False
+    MISO1 : False
+    Beamforming : False
+
   # saverootdir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/
   saverootdir : /home/data/DBhogun/SMS_WSJ_DB
   fs : 8000
@@ -48,12 +60,14 @@ SMS_WSJ:
   least_time : 2
   num_spks : 2
   num_ch : 6
+  ref_ch : 0
 
-  # saved_tr_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/train/CleanMix/
-  # saved_dt_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/dev/CleanMix/
-  saved_tr_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/train/CleanMix/
-  saved_dt_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/dev/CleanMix/
-
+  saved_tr_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/train/CleanMix/
+  saved_dt_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/dev/CleanMix/
+  # saved_tr_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/train/CleanMix/
+  # saved_dt_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/dev/CleanMix/
+  sms_wsj_observation_dir : /home/nas/user/hogun/sms_wsj/test/observation
+  sms_wsj_speech_source_dir : /home/nas/user/hogun/sms_wsj/test/speech_source_scaled
 
 STFT:
   fs : 8000 
@@ -74,25 +88,27 @@ ISTFT:
   overlap : 192 #8ms  #16ms
 
 dataloader:
+  check_audio : False
+
   Train:
-    batch_size: 12
+    batch_size: 20
     shuffle: True
-    num_workers: 40
+    num_workers: 70
 
   Development:
-    batch_size: 10
+    batch_size: 20
     shuffle: False
-    num_workers: 40
+    num_workers: 70
   
   TestMISO_1:
     batch_size : 1
     shuffle: false
     num_workers : 0
 
-  Evaluation:
+  Test:
     batch_size: 1
     shuffle: false
-    num_workers: 50
+    num_workers: 30
 
 # #### network structures
 MISO_1:
@@ -133,6 +149,11 @@ trainer_sp:
   check_point : [True,5] # Enables checkpoint saving of model per 10epochs
   model_load : [False,'./model_result/IITP/epoch11.pth.tar']
 
+trainer_beamform:
+  MISO1_path: model_result/1115_MISO1_targetScaled_overlap3_4_stftScalerevise/bestmodel.pth.tar
+  check_output : False
+  save_output : True
+
 trainer_en:
   epochs : 100
   device : 1
@@ -141,18 +162,22 @@ trainer_en:
   clipping : False
   max_norm : 5.0 # Gradient norm threshold to clip
   print_freq : 10 #frequency of printing training info
-  MISO1_path : model_result/1022_MISO1_targetScaled/bestmodel.pth.tar
+  MISO1_path : model_result/1115_MISO1_targetScaled_overlap3_4_stftScalerevise/bestmodel.pth.tar
 
-  save_folder : model_result/1103_MISO2
+  save_folder : model_result/12_08_MISO3_Batch20_MISO1_1115_MISO1_targetScaled_overlap3_4_stftScalerevise
   model_path : bestmodel.pth.tar
-  check_point : [True,10] # Enables checkpoint saving of model per 10epochs
-  model_load : [False,'./model_result/IITP/epoch11.pth.tar']
+  check_point : [True,5] # Enables checkpoint saving of model per 10epochs
+  model_load : [True,'./model_result/11_30_MISO3_Batch20_MISO1_1115_MISO1_targetScaled_overlap3_4_stftScalerevise/epoch41.pth.tar']
+  load_MISO1_Output : True
+  load_MVDR_Output : False
 
 tester:
+  save_dir : /home/nas/user/hogun/sms_wsj/test/
   device: 1
-  model_load : [True,'./model_result/8014_PIT/bestmodel.pth.tar']
-
-
+  MISO1_path : ./model_result/1115_MISO1_targetScaled_overlap3_4_stftScalerevise/bestmodel.pth.tar
+  MISO2_path : null
+  MISO3_path : ./model_result/11_30_MISO3_Batch20_MISO1_1115_MISO1_targetScaled_overlap3_4_stftScalerevise/bestmodel.pth.tar
+  save_train_dataset : True
 optimizer:
   name: Adam   ### Adam, RMSprop, SGD
   # lr: !!float 1e-3 0  #Init learning rqte
@@ -165,4 +190,3 @@ scheduler:
     patience : 3  #-> 논문 3
     min_lr : 0.000005
 
-check_MISO1: True
