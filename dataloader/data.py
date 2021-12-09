@@ -8,6 +8,7 @@ from pathlib import Path
 from scipy import signal
 import librosa
 import scipy
+<<<<<<< HEAD
 from itertools import permutations
 from numpy.linalg import solve
 import soundfile as sf
@@ -17,6 +18,12 @@ warnings.filterwarnings('ignore')
 class AudioDataset(data.Dataset):
     
     def __init__(self,trainMode, functionMode, num_spks, num_ch, pickle_dir,model,device,cudaUse,check_audio,**STFT_args):
+=======
+
+class AudioDataset(data.Dataset):
+    
+    def __init__(self,mode,num_spks,pickle_dir,**STFT_args):
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
         super(AudioDataset, self).__init__()
         self.trainMode = trainMode
         self.functionMode = functionMode
@@ -26,6 +33,7 @@ class AudioDataset(data.Dataset):
         self.nperseg = STFT_args['length']
         self.noverlap = STFT_args['overlap']
         self.num_spks = num_spks
+<<<<<<< HEAD
         self.num_ch = num_ch
         self.device = device
         self.cudaUse = cudaUse
@@ -33,6 +41,13 @@ class AudioDataset(data.Dataset):
         hann_win = scipy.signal.get_window('hann', self.nperseg)
         self.scale = np.sqrt(1.0 / hann_win.sum()**2)
         self.check_audio = check_audio
+=======
+        self.pickle_dir = list(Path(pickle_dir).glob('**/**/**/**/*.pickle'))
+        self.mode = mode
+
+        hann_win = scipy.signal.get_window('hann', self.nperseg)
+        self.scale = np.sqrt(1.0 / hann_win.sum()**2)
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
         # self.pickle_dir = self.pickle_dir[0:10]
 
         # # check chunked audio signal
@@ -84,6 +99,7 @@ class AudioDataset(data.Dataset):
 
         mix_stft = torch.permute( torch.from_numpy(mix_stft),[0,2,1])
 
+<<<<<<< HEAD
                     
         if self.functionMode == 'Separate':
             """
@@ -99,6 +115,9 @@ class AudioDataset(data.Dataset):
                     mix_stft : [Mic,T,F]
                     ref_stft : [Mic,T,F]
             """
+=======
+        if self.mode == 'Beamforming':
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
             # hann_win = scipy.signal.get_window('hann', self.nperseg)
             # scale = np.sqrt(1.0 / hann_win.sum()**2)
             # mix, fs = librosa.load('./TEST1/mix.wav', mono = False, sr= 8000)
@@ -117,6 +136,7 @@ class AudioDataset(data.Dataset):
 
             # return mix_stft, ref_stft, S1, S2, BeamOutDir
 
+<<<<<<< HEAD
             BeamOutSaveDir = str(self.pickle_dir[index]).replace('CleanMix','Beamforming')
             MISO1OutSaveDir = str(self.pickle_dir[index]).replace('CleanMix','MISO1')
 
@@ -529,6 +549,45 @@ class AudioDataset(data.Dataset):
     def apply_beamformer(self, beamformer, mixture):
         return np.einsum('...a,...at->...t',beamformer.conj(), mixture)            
 
+=======
+            saveDir = str(self.pickle_dir[index]).replace('CleanMix','Beamforming')
+            return mix_stft, ref_stft, saveDir
+
+        elif self.mode == 'Enhance':
+            #BeamOutDir = str(self.pickle_dir[index]).replace('CleanMix','Beamforming')
+            BeamOutDir = '/home/data/DBhogun/SMS_WSJ_DB/train/Beamforming/16449_4abc020w_49bc0305_0.pickle'
+            with open (BeamOutDir, 'rb') as f:
+                beam_infos = pickle.load(f)
+                
+                s1_bf = beam_infos['S1_BF']
+                s2_bf = beam_infos['S2_BF']
+            f.close()
+
+            # Temp Code
+            hann_win = scipy.signal.get_window('hann', self.nperseg)
+            scale = np.sqrt(1.0 / hann_win.sum()**2)
+            mix, fs = librosa.load('./TEST1/mix.wav', mono = False, sr= 8000)
+            mix = mix.T
+            mix_stft = self.STFT(mix)
+            mix_stft = torch.from_numpy(mix_stft/scale)
+            mix_stft = torch.permute(mix_stft,[0,2,1])
+            s1, fs = librosa.load('./TEST1/s1.wav', mono = False, sr= 8000)
+            s1 = s1.T
+            S1 = self.STFT(s1)
+            S1 = torch.from_numpy(S1/scale)
+            S1 = torch.permute(S1,[0,2,1])
+            s2, fs = librosa.load('./TEST1/s2.wav', mono = False, sr= 8000)
+            s2 = s2.T
+            S2 = self.STFT(s2)
+            S2 = torch.from_numpy(S2/scale)
+            S2 = torch.permute(S2,[0,2,1])
+            return mix_stft, ref_stft, s1_bf, s2_bf, S1, S2
+            
+            # return mix_stft, ref_stft, s1_bf, s2_bf
+
+        else:
+            return mix_stft, ref_stft
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
 
     
     def __len__(self):

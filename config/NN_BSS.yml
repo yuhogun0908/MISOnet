@@ -26,6 +26,7 @@ RIR_mixing:
   fs : 16000
   chunk_time : 4
   least_time : 2
+<<<<<<< HEAD
   num_spks : 2
   num_ch : 6
 
@@ -68,6 +69,36 @@ SMS_WSJ:
   # saved_dt_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/dev/CleanMix/
   sms_wsj_observation_dir : /home/nas/user/hogun/sms_wsj/test/observation
   sms_wsj_speech_source_dir : /home/nas/user/hogun/sms_wsj/test/speech_source_scaled
+=======
+  num_spks : 2
+  num_ch : 6
+
+SMS_WSJ:
+  select_mode : 1 # 1 : train, 2: development, 3: evaluation
+  rootdir : /home/nas/user/hogun/sms_wsj/test/
+  # rootdir : /home/data/DBhogun/test/
+  clean: speech_source_scaled
+  mix : observation
+  early : early
+  noise : noise
+  tail : tail
+  tr_file : train_si284
+  dev_file : cv_dev93
+  test_file : test_eval92
+  # saverootdir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/
+  saverootdir : /home/data/DBhogun/SMS_WSJ_DB
+  fs : 8000
+  chunk_time : 4
+  least_time : 2
+  num_spks : 2
+  num_ch : 6
+
+  # saved_tr_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/train/CleanMix/
+  # saved_dt_pickle_dir : /home/nas/user/hogun/NN_BSS/dataset/SMS_WSJ_scaledversion/dev/CleanMix/
+  saved_tr_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/train/CleanMix/
+  saved_dt_pickle_dir : /home/data/DBhogun/SMS_WSJ_DB/dev/CleanMix/
+
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
 
 STFT:
   fs : 8000 
@@ -91,6 +122,7 @@ dataloader:
   check_audio : False
 
   Train:
+<<<<<<< HEAD
     batch_size: 20
     shuffle: True
     num_workers: 70
@@ -99,6 +131,16 @@ dataloader:
     batch_size: 20
     shuffle: False
     num_workers: 70
+=======
+    batch_size: 12
+    shuffle: True
+    num_workers: 40
+
+  Development:
+    batch_size: 10
+    shuffle: False
+    num_workers: 40
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
   
   TestMISO_1:
     batch_size : 1
@@ -137,6 +179,8 @@ MISO_3:
 
 #### Optimizer settings
 trainer_sp:
+<<<<<<< HEAD
+=======
   epochs : 100
   device : 1
   half_lr : True
@@ -144,6 +188,21 @@ trainer_sp:
   clipping : False
   max_norm : 5.0 # Gradient norm threshold to clip
   print_freq : 10 #frequency of printing training info
+  save_folder : model_result/1115_MISO1_targetScaled_overlap3_4_stftScalerevise
+  model_path : bestmodel.pth.tar
+  check_point : [True,5] # Enables checkpoint saving of model per 10epochs
+  model_load : [False,'./model_result/IITP/epoch11.pth.tar']
+
+trainer_en:
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
+  epochs : 100
+  device : 1
+  half_lr : True
+  early_stop : True # early training when no improvement for 10 epochs
+  clipping : False
+  max_norm : 5.0 # Gradient norm threshold to clip
+  print_freq : 10 #frequency of printing training info
+<<<<<<< HEAD
   save_folder : model_result/1115_MISO1_targetScaled_overlap3_4_stftScalerevise
   model_path : bestmodel.pth.tar
   check_point : [True,5] # Enables checkpoint saving of model per 10epochs
@@ -163,6 +222,18 @@ trainer_en:
   max_norm : 5.0 # Gradient norm threshold to clip
   print_freq : 10 #frequency of printing training info
   MISO1_path : model_result/1115_MISO1_targetScaled_overlap3_4_stftScalerevise/bestmodel.pth.tar
+=======
+  MISO1_path : model_result/1022_MISO1_targetScaled/bestmodel.pth.tar
+
+  save_folder : model_result/1103_MISO2
+  model_path : bestmodel.pth.tar
+  check_point : [True,10] # Enables checkpoint saving of model per 10epochs
+  model_load : [False,'./model_result/IITP/epoch11.pth.tar']
+
+tester:
+  device: 1
+  model_load : [True,'./model_result/8014_PIT/bestmodel.pth.tar']
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d
 
   save_folder : model_result/12_08_MISO3_Batch20_MISO1_1115_MISO1_targetScaled_overlap3_4_stftScalerevise
   model_path : bestmodel.pth.tar
@@ -190,3 +261,7 @@ scheduler:
     patience : 3  #-> 논문 3
     min_lr : 0.000005
 
+<<<<<<< HEAD
+=======
+check_MISO1: True
+>>>>>>> 7431d9618a519d5bf78594445b6810a1a197388d

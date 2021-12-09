@@ -4,10 +4,11 @@ https://arxiv.org/abs/2010.01703
 
 ## Todo
 - [x] MISO1 implementation (seperation Network)
-- [ ] MVDR implementation
-- [ ] MISO3 implementatino (enhancement Network)
+- [x] Speaker Alignment System
+- [x] MVDR implementation
+- [x] MISO3 implementatino (enhancement Network)
 - [ ] Speaker counting Network
-- [ ] SMS-WSJ Dataset generation
+- [x] SMS-WSJ Dataset generation
 - [ ] LibriCSS Dataset generation
 
 ## Requirements
@@ -33,6 +34,28 @@ pip install -r requirements.txt
 ```
 python run.py --config=./config
 ```
+
+3. Spectrogram
+- Obervation
+<img src="https://user-images.githubusercontent.com/67786803/142854365-fd342767-c4cb-4222-9f52-0ee3dd57ba57.jpg" width="300" height="300">
+
+- Clean Source 1 & 2
+<span>
+<img src="https://user-images.githubusercontent.com/67786803/142854443-d979702e-7182-4373-a01a-5f37da2d9dd7.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/142854420-c8e5ea9c-8016-48b4-a952-421078054d08.jpg" width="300" height="300">
+</span>
+
+- MISO1 Model Output Source 1 & 2
+<span>
+<img src="https://user-images.githubusercontent.com/67786803/142854505-debc5819-2475-41b5-9f90-f6b52b08e355.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/142854547-7443024d-e43f-47c9-97f9-442c1a82b0ad.jpg" width="300" height="300">
+</span>
+ 
+- MVDR Beamformer Output Source 1 & 2
+<span>
+<img src="https://user-images.githubusercontent.com/67786803/142854587-7efb9afa-bc9f-42fc-94f5-fb7b61c3fded.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/142854613-9657a16c-f602-4ed2-86d6-f5afa52e4c8d.jpg" width="300" height="300">
+</span>
 
 ## Reference
 https://github.com/kaituoxu/Conv-TasNet
