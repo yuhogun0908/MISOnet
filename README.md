@@ -45,6 +45,12 @@ python run.py --config=./config
 <img src="https://user-images.githubusercontent.com/67786803/149371411-e2c0e646-d4cd-47b9-b4d5-740af458e0ab.jpg" width="300" height="300">
 </span>
 
+<span>
+<audio controls>
+    <source src='./sample/Clean/3_441c040w_445c040o_0.wav'>
+</audio>
+</span>
+
 - MISO1 Model Output Source 1 & 2
 <span>
 <img src="https://user-images.githubusercontent.com/67786803/149370815-0eef8473-4933-4c25-ab36-a348e9fe8e9f.jpg" width="300" height="300">
