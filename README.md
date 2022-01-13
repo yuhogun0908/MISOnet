@@ -35,26 +35,32 @@ pip install -r requirements.txt
 python run.py --config=./config
 ```
 
-3. Spectrogram
+3. Spectrogram # Example of 3_441c040w_445c040o_0.wav amoung test_eval92 (sms_wsj)
 - Obervation
-<img src="https://user-images.githubusercontent.com/67786803/142854365-fd342767-c4cb-4222-9f52-0ee3dd57ba57.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/149370478-77ed9d46-76cb-4ff4-baf5-4146ecbef723.jpg" width="300" height="300">
 
 - Clean Source 1 & 2
-<span>
-<img src="https://user-images.githubusercontent.com/67786803/142854443-d979702e-7182-4373-a01a-5f37da2d9dd7.jpg" width="300" height="300">
-<img src="https://user-images.githubusercontent.com/67786803/142854420-c8e5ea9c-8016-48b4-a952-421078054d08.jpg" width="300" height="300">
-</span>
-
-- MISO1 Model Output Source 1 & 2
 <span>
 <img src="https://user-images.githubusercontent.com/67786803/142854505-debc5819-2475-41b5-9f90-f6b52b08e355.jpg" width="300" height="300">
 <img src="https://user-images.githubusercontent.com/67786803/142854547-7443024d-e43f-47c9-97f9-442c1a82b0ad.jpg" width="300" height="300">
 </span>
- 
+
+- MISO1 Model Output Source 1 & 2
+<span>
+<img src="https://user-images.githubusercontent.com/67786803/149370815-0eef8473-4933-4c25-ab36-a348e9fe8e9f.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/149370856-ec84f2d4-7df2-4f5b-bd65-e32f14887f95.jpg" width="300" height="300">
+</span>
+
 - MVDR Beamformer Output Source 1 & 2
 <span>
-<img src="https://user-images.githubusercontent.com/67786803/142854587-7efb9afa-bc9f-42fc-94f5-fb7b61c3fded.jpg" width="300" height="300">
-<img src="https://user-images.githubusercontent.com/67786803/142854613-9657a16c-f602-4ed2-86d6-f5afa52e4c8d.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/149370919-8d0a17a0-aecc-4d95-8430-227ab4568fb4.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/149370962-831f5eff-3806-46a9-a63f-cf11003f9604.jpg" width="300" height="300">
+</span>
+
+- MISO3 Model Output Source 1 & 2
+<span>
+<img src="https://user-images.githubusercontent.com/67786803/149371113-110b1915-b9e1-4f4f-872c-04d1c3176091.jpg" width="300" height="300>
+<img src="https://user-images.githubusercontent.com/67786803/149371157-0c90bbc4-9689-4758-acb0-3a08c50014cd.jpg" width="300" height="300>
 </span>
 
 ## Reference
