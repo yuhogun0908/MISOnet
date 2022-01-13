@@ -45,9 +45,14 @@ python run.py --config=./config
 <img src="https://user-images.githubusercontent.com/67786803/149371411-e2c0e646-d4cd-47b9-b4d5-740af458e0ab.jpg" width="300" height="300">
 </span>
 
-<audio controls>
-    <source src='./sample/Clean/3_441c040w_445c040o_0.wav'>
-</audio>
+click <audio id="ID004" source src="./sample/Clean/3_441c040w_445c040o_0.wav"></audio><button onclick="playAudio('ID004')" type="button">play4</button> and then <audio id="ID003" source src="./sample/Clean/3_441c040w_445c040o_0.wav"></audio><button onclick="playAudio('ID003')" type="button">play3</button>
+<script>
+function playAudio(audio_element) {
+	var x = document.getElementById(audio_element);
+	x.play();
+}
+</script>
+
 
 - MISO1 Model Output Source 1 & 2
 <span>
