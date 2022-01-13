@@ -28,46 +28,52 @@ def read_wav(filedir,samplingrate):
 
     return wav
 
-def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsaveDir, earlysaveDir, tailsaveDir,noisesaveDir, MISO1saveDir, BeamformingsaveDir, wavpath_dict, fname, normalize=True):
+def chunkSplit(save_flag, num_spks, num_ch, chunk_time, least_time, fs, CleanMixsaveDir, earlysaveDir, tailsaveDir, noisesaveDir, MISO1saveDir, BeamformingsaveDir, wavpath_dict, fname, normalize=True):
 
-    fname = fname.rstrip('.wav')
+    fname = fname.replace('.wav', '')
     ''' read wave '''
     if save_flag['mix']:
         mix = read_wav(wavpath_dict['mix'], fs) # mix
-        length, num_ch = mix.shape
+        length, _ = mix.shape
     if save_flag['clean']:
         ref_pad = [[] for _ in range(num_spks)]
         ref1 = read_wav(wavpath_dict['ref_1'], fs)
         ref2 = read_wav(wavpath_dict['ref_2'], fs)
-        length, num_ch = ref1.shape
+        length, _ = ref1.shape
         ref = [ref1, ref2]
     if save_flag['early']:
         early_pad = [[] for _ in range(num_spks)]
         early1 = read_wav(wavpath_dict['early_1'], fs)
         early2 = read_wav(wavpath_dict['early_2'], fs)
-        length, num_ch = early1.shape
+        length, _ = early1.shape
         early = [early1, early2]
     if save_flag['tail']:
         tail_pad = [[]for _ in range(num_spks)]
         tail1 = read_wav(wavpath_dict['tail_1'], fs)
         tail2 = read_wav(wavpath_dict['tail_2'], fs)
-        length, num_ch = tail1.shape
+        length, _ = tail1.shape
         tail = [tail1, tail2]
     if save_flag['noise']:
         noise = read_wav(wavpath_dict['noise'], fs)
-        length, num_ch = noise.shape
+        length, _ = noise.shape
     if save_flag['MISO1']:
         MISO1_pad = [[] for _ in range(num_spks)]
         MISO1_1 = read_wav(wavpath_dict['MISO1_1'],fs)
         MISO1_2 = read_wav(wavpath_dict['MISO1_2'],fs)
-        length, num_ch = MISO1_1.shape
+        length, _ = MISO1_1.shape
         MISO1 = [MISO1_1, MISO1_2]
     if save_flag['Beamforming']:
         Beamforming_pad = [[] for _ in range(num_spks)]
         # 1 ch일때 shape 확인 -> 최종 [T,1]로 나와야 됨.
         Beamforming_1 = read_wav(wavpath_dict['Beamforming_1'],fs)
         Beamforming_2 = read_wav(wavpath_dict['Beamforming_2'],fs)
-        length, num_ch = Beamforming_1
+
+        if len(Beamforming_1.shape) == 1:
+            Beamforming_1 = np.expand_dims(Beamforming_1, axis=1)
+        if len(Beamforming_2.shape) == 1:
+            Beamforming_2 = np.expand_dims(Beamforming_2, axis=1)
+ 
+        length, _ = Beamforming_1.shape
         Beamforming = [Beamforming_1, Beamforming_2]
 
     ''' chunk wave '''
@@ -88,41 +94,53 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
             split_cleanmix['mix'] = mix_pad
             for spk_idx in range(num_spks):
                 ref_pad[spk_idx] = np.pad(ref[spk_idx], ((0,gap),(0,0)), constant_values=0)
+                assert ref_pad[spk_idx].shape[0] == chunk_size, ('ref{} length is not equall the chunk size'.format(spk_idx))
                 split_cleanmix['ref'+str(spk_idx+1)] = ref_pad[spk_idx]
+
             with open(os.path.join(CleanMixsaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                 pickle.dump(split_cleanmix,f) 
         if save_flag['early']:
             split_early = {}
             for spk_idx in range(num_spks):
                 early_pad[spk_idx] = np.pad(early[spk_idx], (0,gap), constant_values=0)
+                assert early_pad[spk_idx].shape[0] == chunk_size, ('early{} length is not equall the chunk size'.format(spk_idx))
                 split_early['early'+str(spk_idx+1)] = early_pad[spk_idx]
+
             with open(os.path.join(earlysaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                 pickle.dump(split_early,f)
         if save_flag['tail']:
             split_tail = {}
             for spk_idx in range(num_spks):             
                 tail_pad[spk_idx] = np.pad(tail[spk_idx], (0,gap), constant_values=0)
+                assert tail_pad[spk_idx].shape[0] == chunk_size, ('tail{} length is not equall the chunk size'.format(spk_idx))
                 split_tail['tail'+str(spk_idx+1)] = tail_pad[spk_idx]
+
             with open(os.path.join(tailsaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                 pickle.dump(split_tail,f)   
         if save_flag['noise']:
             split_noise = {}
             noise_pad = np.pad(noise, ((0, gap), (0,0)), constant_values=0) 
+            assert noise_pad.shape[0] == chunk_size, ('noise length is not equall the chunk size')
             split_noise['noise'] = noise_pad
+            
             with open(os.path.join(noisesaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                 pickle.dump(split_noise,f)
         if save_flag['MISO1']:
             split_MISO1 = {}
             for spk_idx in range(num_spks):
                 MISO1_pad[spk_idx] = np.pad(MISO1[spk_idx], ((0,gap), (0,0)),constant_values= 0)
+                assert MISO1_pad[spk_idx].shape[0] == chunk_size, ('MISO1_{} length is not equall the chunk size'.format(spk_idx))
                 split_MISO1['MISO1_'+str(spk_idx+1)] = MISO1_pad[spk_idx]
+                
             with open(os.path.join(MISO1saveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                 pickle.dump(split_MISO1,f)
         if save_flag['Beamforming']:
             split_Beamforming = {}
             for spk_idx in range(num_spks):
                 Beamforming_pad[spk_idx] = np.pad(Beamforming[spk_idx],((0,gap), (0,0)), constant_values=0)
+                assert Beamforming_pad[spk_idx].shape[0] == chunk_size, ('Beamforming_{} length is not equall the chunk size'.format(spk_idx))
                 split_Beamforming['Beamforming_'+str(spk_idx+1)] = Beamforming_pad[spk_idx]
+
             with open(os.path.join(BeamformingsaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                 pickle.dump(split_Beamforming,f)
 
@@ -149,6 +167,7 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
                 split_cleanmix['mix'] = mix_split
                 for spk_idx in range(num_spks):
                     ref_split[spk_idx] = ref[spk_idx][start:start+chunk_size,:]
+                    assert ref_split[spk_idx].shape[0] == chunk_size, ('ref{} length is not equall the chunk size'.format(spk_idx))
                     split_cleanmix['ref'+str(spk_idx+1)]= ref_split[spk_idx]
                 with open(os.path.join(CleanMixsaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                     pickle.dump(split_cleanmix,f)    
@@ -157,6 +176,7 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
                 split_early = {}
                 for spk_idx in range(num_spks):
                     early_split[spk_idx] = early[spk_idx][start:start+chunk_size,:]
+                    assert early_split[spk_idx].shape[0] == chunk_size, ('early{} length is not equall the chunk size'.format(spk_idx))
                     split_early['early'+str(spk_idx+1)]= early_split[spk_idx]
                 with open(os.path.join(earlysaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                     pickle.dump(split_early,f)   
@@ -165,6 +185,7 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
                 split_tail = {}
                 for spk_idx in range(num_spks):
                     tail_split[spk_idx] = tail[spk_idx][start:start+chunk_size,:]
+                    assert tail_pad[spk_idx].shape[0] == chunk_size, ('tail{} length is not equall the chunk size'.format(spk_idx))
                     split_tail['early'+str(spk_idx+1)]= tail_split[spk_idx]
                 with open(os.path.join(tailsaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                     pickle.dump(split_tail,f)
@@ -172,6 +193,7 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
             if save_flag['noise']:
                 split_noise = {}
                 noise_split = noise[start:start+chunk_size,:]
+                assert noise_split.shape[0] == chunk_size, ('noise length is not equall the chunk size')
                 split_noise['noise'] = noise_split
                 with open(os.path.join(noisesaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                     pickle.dump(split_noise,f)
@@ -180,6 +202,7 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
                 split_MISO1 = {}
                 for spk_idx in range(num_spks):
                     MISO1_split[spk_idx] = MISO1[spk_idx][start:start+chunk_size,:]
+                    assert MISO1_split[spk_idx].shape[0] == chunk_size, ('MISO1_{} length is not equall the chunk size'.format(spk_idx))
                     split_MISO1['MISO1_'+str(spk_idx+1)]= MISO1_split[spk_idx]
                 with open(os.path.join(MISO1saveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                     pickle.dump(split_MISO1,f)  
@@ -188,6 +211,7 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
                 split_Beamforming = {}
                 for spk_idx in range(num_spks):
                     Beamforming_split[spk_idx] = Beamforming[spk_idx][start:start+chunk_size,:]
+                    assert Beamforming_split[spk_idx].shape[0] == chunk_size, ('Beamforming_{} length is not equall the chunk size'.format(spk_idx))
                     split_Beamforming['Beamforming_'+str(spk_idx+1)]= Beamforming_split[spk_idx]
                 with open(os.path.join(BeamformingsaveDir,fname + '_'+ str(split_idx)+'.pickle'), 'wb') as f:
                     pickle.dump(split_Beamforming,f)  
@@ -204,14 +228,11 @@ def chunkSplit(save_flag, num_spks,num_ch, chunk_time,least_time, fs, CleanMixsa
             split_idx += 1
             
 
-
-
 class main_smswsj:
     def __init__(self, save_flag,  num_spks, num_ch, chunk_time, least_time, fs, rootDir,saveRootDir, cleanDir, mixDir, earlyDir, tailDir, noiseDir, MISO1Dir, BeamformingDir, trFile, devFile, testFile):
-        mode = {'train' : trFile,'dev' : devFile, 'test':testFile}
-        # mode = {'test':testFile}
+        # mode = {'train' : trFile,'dev' : devFile, 'test':testFile}
+        mode = {'train' : trFile,'dev' : devFile}
         # mode = {'dev' : devFile, 'test':testFile}
-
         self.save_flag = save_flag
         for mode_idx in mode:
 
@@ -243,10 +264,9 @@ class main_smswsj:
                 Path(self.MISO1saveDir).mkdir(exist_ok=True, parents=True)
 
             self.BeamformingrootDir = os.path.join(rootDir, BeamformingDir, mode[mode_idx])
-            self.BeamformingsaveDir = os.path.join(rootDir, mode_idx, BeamformingDir)
+            self.BeamformingsaveDir = os.path.join(saveRootDir, mode_idx, BeamformingDir)
             if self.save_flag['Beamforming']:
                 Path(self.BeamformingsaveDir).mkdir(exist_ok=True, parents=True)
-
             self.mixfiles = os.listdir(self.mixrootDir)
             
             self.num_spks =num_spks; self.num_ch=num_ch; self.chunk_time = chunk_time; self.least_time = least_time; self.fs = fs
@@ -261,6 +281,7 @@ class main_smswsj:
 
 
     def process(self,idx):
+        
         file_ =  self.mixfiles[idx]       
         wavpath_dict = {}
         for spk_idx in range(2):  # SMS_WSJ dataset has two spk
@@ -286,7 +307,9 @@ class main_smswsj:
         noise_path = os.path.join(self.noiserootDir, file_)
         wavpath_dict['noise'] = noise_path
 
-        chunkSplit(self.save_flag, self.num_spks,self.num_ch, self.chunk_time,self.least_time, self.fs, self.CleanMixsaveDir, self.earlysaveDir, self.tailsaveDir,self.noisesaveDir, self.MISO1saveDir, self.BeamformingsaveDir, wavpath_dict, file_ ,normalize=True)
+        chunkSplit(self.save_flag, self.num_spks,self.num_ch, self.chunk_time,self.least_time,\
+                self.fs, self.CleanMixsaveDir, self.earlysaveDir, self.tailsaveDir, self.noisesaveDir,\
+                self.MISO1saveDir, self.BeamformingsaveDir, wavpath_dict, file_ ,normalize=True)
 
         
         

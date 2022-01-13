@@ -14,8 +14,8 @@ import os
 import pickle
 from model import MISO_1, MISO_2, MISO_3
 import torch
-from trainer import Trainer_Separate, Trainer_Enhance, Trainer_Beamforming
-from tester import Tester_Separate, Tester_Beamforming #, Tester_Enhance
+from trainer import Trainer_Separate, Trainer_Enhance
+from tester import Tester_Separate, Tester_Beamforming , Tester_Enhance
 # Blind Source Separation by using NN
 # 1. Feature Extractor
 # 2. Build dataloader 
@@ -29,6 +29,7 @@ def run(args,config):
     fs = config[args.dataset]['fs']; chunk_time = config[args.dataset]['chunk_time']; least_time = config[args.dataset]['least_time']
     num_spks = config[args.dataset]['num_spks']
     num_ch = config[args.dataset]['num_ch']
+    num_ch_utilize = config[args.dataset]['num_ch_utilize']
     if args.mode == 'Extraction':
         if args.dataset == 'REVERB_2MIX':
             from dataloader.REVERB_2MIX import main_reverb
@@ -150,42 +151,60 @@ def run(args,config):
             model.load_state_dict(package['model_state_dict'])
             model.eval()
             print('-'*85)
-            print('Loading MISO3 model %s'% MISO1_path)
+            print('Loading MISO3 model %s'% MISO3_path)
             print('-'*85)
 
     if args.mode == 'Train':
         from dataloader.data import AudioDataset
+        ref_ch = config[args.dataset]['ref_ch']
         tr_pickle_dir = config[args.dataset]['saved_tr_pickle_dir']
+        
         dt_pickle_dir = config[args.dataset]['saved_dt_pickle_dir']
+
+        if config['trainer_en']['load_MISO1_Output']:
+            tr_MISO1_pickle_dir = config[args.dataset]['saved_tr_MISO1_pickle_dir']
+            dt_MISO1_pickle_dir = config[args.dataset]['saved_dt_MISO1_pickle_dir']
+        if config['trainer_en']['load_Beamforming_Output']: 
+            tr_Beamforming_pickle_dir = config[args.dataset]['saved_tr_Beamforming_pickle_dir']
+            dt_Beamforming_pickle_dir = config[args.dataset]['saved_dt_Beamforming_pickle_dir']
+
 
         # dataloader
         if args.train_mode == 'Separate':
             functionMode = 'Separate'
-            tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,tr_pickle_dir,model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-            dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,dt_pickle_dir,mode=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-        
-        elif args.train_mode == 'Beamforming':
-            functionMode = 'Beamforming'
-            tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,tr_pickle_dir,model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-            dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,dt_pickle_dir,model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-        
+            tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,num_ch_utilize,tr_pickle_dir, ref_ch,tr_MISO1_pickle_dir=None, tr_Beamforming_pickle_dir=None, \
+                                     model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+            dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,num_ch_utilize,dt_pickle_dir,ref_ch,dt_MISO1_pickle_dir=None, dt_Beamforming_pickle_dir=None, \
+                                     mode=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+         
         elif (args.train_mode == 'MISO2') or (args.train_mode == 'MISO3'):
-            if config['trainer_en']['load_MISO1_Output'] and config['trainer_en']['load_MVDR_Output']:
+            if config['trainer_en']['load_MISO1_Output'] and config['trainer_en']['load_Beamforming_Output']:
                 functionMode = 'Enhance_Load_MISO1_MVDR_Output'
-                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,tr_pickle_dir,model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,dt_pickle_dir,model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,num_ch_utilize,tr_pickle_dir, ref_ch, tr_MISO1_pickle_dir, tr_Beamforming_pickle_dir, \
+                                        model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,num_ch_utilize,dt_pickle_dir, ref_ch, dt_MISO1_pickle_dir, dt_Beamforming_pickle_dir, \
+                                        model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
             elif config['trainer_en']['load_MISO1_Output'] :
                 functionMode = 'Enhance_Load_MISO1_Output'
-                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,tr_pickle_dir,model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,dt_pickle_dir,model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-            elif config['trainer_en']['load_MVDR_Output']:
+                tr_Beamforming_pickle_dir = dt_Beamforming_pickle_dir = None
+                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,num_ch_utilize,tr_pickle_dir,ref_ch, tr_MISO1_pickle_dir, tr_Beamforming_pickle_dir, \
+                                        model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,num_ch_utilize,dt_pickle_dir,ref_ch, dt_MISO1_pickle_dir, dt_Beamforming_pickle_dir, \
+                                        model=None,device=None,cudaUse=False,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+            elif config['trainer_en']['load_Beamforming_Output']:
                 functionMode = 'Enhance_Load_MVDR_Output'
-                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,tr_pickle_dir,model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,dt_pickle_dir,model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])    
+                tr_MISO1_pickle_dir = dt_MISO1_pickle_dir = None
+                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,num_ch_utilize,tr_pickle_dir,ref_ch, tr_MISO1_pickle_dir, tr_Beamforming_pickle_dir, \
+                                        model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,num_ch_utilize,dt_pickle_dir,ref_ch, dt_MISO1_pickle_dir, dt_Beamforming_pickle_dir, \
+                                        model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])    
             else:
                 functionMode = 'Enhance_Scratch'
-                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,tr_pickle_dir,model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])
-                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,dt_pickle_dir,model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])   
+                tr_MISO1_pickle_dir = tr_Beamforming_pickle_dir = dt_MISO1_pickle_dir = dt_Beamforming_pickle_dir = None
+                tr_dataset = AudioDataset('Train',functionMode,num_spks,num_ch,num_ch_utilize,tr_pickle_dir,ref_ch, tr_MISO1_pickle_dir, tr_Beamforming_pickle_dir, \
+                                        model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])
+                dt_dataset = AudioDataset('Dev',functionMode,num_spks,num_ch,num_ch_utilize,dt_pickle_dir,ref_ch, dt_MISO1_pickle_dir, dt_Beamforming_pickle_dir, \
+                                        model=model_sep,device=config['gpu_num'],cudaUse=args.use_cuda,check_audio=config['dataloader']['check_audio'],**config['STFT'])   
         else:
             assert -1, '[Error] Choose correct train mode'
             
@@ -205,13 +224,12 @@ def run(args,config):
 
         #trainer
         if args.train_mode == 'MISO1':
-            trainer = Trainer_Separate(args.dataset, num_spks,tr_loader, dt_loader, model,optimizer,scheduler,config,config['gpu_num'], args.log_path)
-        elif args.train_mode == 'Beamforming':
-            trainer = Trainer_Beamforming(args.dataset, num_spks, tr_loader, dt_loader, model,config,config['gpu_num'],args.log_path) 
+            trainer = Trainer_Separate(args.dataset, num_spks, ref_ch, tr_loader, dt_loader, model,optimizer,scheduler,config,\
+                                    config['gpu_num'],args.use_cuda, args.log_path)
         elif (args.train_mode == 'MISO2') or (args.train_mode == 'MISO3'): 
             # Checking
-            trainer = Trainer_Enhance(args.dataset, args.train_mode, num_spks, tr_loader, tr_loader, model,optimizer,scheduler,config,config['gpu_num'], args.log_path)
-            
+            trainer = Trainer_Enhance(args.dataset, args.train_mode, num_spks, ref_ch, tr_loader, tr_loader, model,optimizer,scheduler,\
+                                    config,config['gpu_num'],args.use_cuda, args.log_path)
         trainer.train()
     
     if args.mode == 'Test':
@@ -222,26 +240,38 @@ def run(args,config):
 
         chunk_time = config['SMS_WSJ']['chunk_time']
         gpu_num = config['gpu_num']
+        num_ch_utilize = config['tester']['num_ch_utilize']
         
-        tr_dataset = AudioDataset_Test(os.path.join(sms_wsj_observation_dir,'train_si284'), os.path.join(sms_wsj_speech_source_dir,'train_si284'), chunk_time, ref_ch, **config['STFT'])
-        dt_dataset = AudioDataset_Test(os.path.join(sms_wsj_observation_dir,'cv_dev93') ,os.path.join(sms_wsj_speech_source_dir,'cv_dev93') , chunk_time, ref_ch, **config['STFT'])
-        test_dataset = AudioDataset_Test(os.path.join(sms_wsj_observation_dir,'test_eval92') ,os.path.join(sms_wsj_speech_source_dir,'test_eval92') ,chunk_time, ref_ch,**config['STFT'])
+        tr_dataset = AudioDataset_Test(os.path.join(sms_wsj_observation_dir,'train_si284'), os.path.join(sms_wsj_speech_source_dir,'train_si284') , \
+                                        chunk_time, ref_ch, num_ch_utilize,  **config['STFT'])
+        dt_dataset = AudioDataset_Test(os.path.join(sms_wsj_observation_dir,'cv_dev93') ,os.path.join(sms_wsj_speech_source_dir,'cv_dev93') ,\
+                                        chunk_time, ref_ch, num_ch_utilize, **config['STFT'])
+        test_dataset = AudioDataset_Test(os.path.join(sms_wsj_observation_dir,'test_eval92') ,os.path.join(sms_wsj_speech_source_dir,'test_eval92') ,\
+                                        chunk_time, ref_ch, num_ch_utilize, **config['STFT'])
 
         tr_loader = DataLoader(tr_dataset, **config['dataloader']['Test'])        
         dt_loader = DataLoader(dt_dataset, **config['dataloader']['Test'], )
         test_loader = DataLoader(test_dataset, **config['dataloader']['Test'])
-
-        save_rootDir = os.path.join(config['tester']['save_dir'], args.train_mode)
-        tr_inference_flag = config['tester']['save_train_dataset']        
-
-        if args.train_mode == 'MISO1':
-            tester = Tester_Separate(args.dataset, tr_loader, dt_loader, test_loader, model, gpu_num, num_spks, chunk_time, save_rootDir,ref_ch, args.use_cuda, tr_inference_flag, **config['ISTFT'] )
-        elif args.train_mode == 'Beamforming':
-            tester = Tester_Beamforming(args.dataset, tr_loader, dt_loader, test_loader, model, gpu_num,num_spks, chunk_time, save_rootDir, ref_ch, args.use_cuda, tr_inference_flag, **config['ISTFT'])
-
         
-        # elif args.train_mode == 'MISO2' or args.train_mode == 'MISO3':
-        #     tester = Tester_Enhance(args.dataset, args.train_mode, dt_loader, test_loader, model_sep, model, gpu_num, num_spks, chunk_time, save_rootDir, ref_ch, args.use_cuda, **config['ISTFT'])
+        beamforming_utterance_flag = config['tester']['beamforming_utterance']
+        if beamforming_utterance_flag:
+            save_rootDir = os.path.join(config['tester']['save_dir'], args.train_mode+'_Utterance')
+        else:
+            save_rootDir = os.path.join(config['tester']['save_dir'], args.train_mode+'_Utterance')
+
+        tr_inference_flag = config['tester']['save_train_dataset']        
+        if args.train_mode == 'MISO1':
+            tester = Tester_Separate(args.dataset, tr_loader, dt_loader, test_loader, model, num_ch_utilize, gpu_num, num_spks, chunk_time, \
+                                    save_rootDir,ref_ch, args.use_cuda, tr_inference_flag, **config['ISTFT'] )
+        elif args.train_mode == 'Beamforming':
+            tester = Tester_Beamforming(args.dataset, tr_loader, dt_loader, test_loader, model, num_ch_utilize, \
+                                        gpu_num, num_spks, chunk_time, save_rootDir, ref_ch, args.use_cuda, \
+                                        tr_inference_flag, beamforming_utterance_flag, **config['ISTFT'])
+        
+        elif args.train_mode == 'MISO2' or args.train_mode == 'MISO3':
+            tester = Tester_Enhance(args.dataset, args.train_mode, dt_loader, test_loader, model_sep, model, \
+                                    num_ch_utilize, gpu_num, num_spks, chunk_time, save_rootDir, ref_ch, args.use_cuda, \
+                                    **config['ISTFT'])
         
         tester.test()
 
