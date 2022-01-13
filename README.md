@@ -41,8 +41,8 @@ python run.py --config=./config
 
 - Clean Source 1 & 2
 <span>
-<img src="https://user-images.githubusercontent.com/67786803/142854505-debc5819-2475-41b5-9f90-f6b52b08e355.jpg" width="300" height="300">
-<img src="https://user-images.githubusercontent.com/67786803/142854547-7443024d-e43f-47c9-97f9-442c1a82b0ad.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/149371375-9371212c-9a78-4424-b58f-169d6c2b9ce3.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/149371411-e2c0e646-d4cd-47b9-b4d5-740af458e0ab.jpg" width="300" height="300">
 </span>
 
 - MISO1 Model Output Source 1 & 2
