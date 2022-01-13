@@ -59,8 +59,8 @@ python run.py --config=./config
 
 - MISO3 Model Output Source 1 & 2
 <span>
- <img src="https://user-images.githubusercontent.com/67786803/149371113-110b1915-b9e1-4f4f-872c-04d1c3176091.jpg" width="300" height="300>
- <img src="https://user-images.githubusercontent.com/67786803/149371589-8f5b660e-f19f-4d44-8d84-01b3683b101d.jpg" width="300" height="300>
+<img src="https://user-images.githubusercontent.com/67786803/149371113-110b1915-b9e1-4f4f-872c-04d1c3176091.jpg" width="300" height="300">
+<img src="https://user-images.githubusercontent.com/67786803/149371589-8f5b660e-f19f-4d44-8d84-01b3683b101d.jpg" width="300" height="300">
 </span>
 
 ## Reference
