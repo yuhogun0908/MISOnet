@@ -45,7 +45,7 @@ python run.py --config=./config
 <img src="https://user-images.githubusercontent.com/67786803/149371411-e2c0e646-d4cd-47b9-b4d5-740af458e0ab.jpg" width="300" height="300">
 </span>
 
-<audio controls>
+<audio>
     <source src='https://user-images.githubusercontent.com/67786803/149378199-85120003-e907-47d5-904d-84342c649454.mp4'>
 </audio>
 
